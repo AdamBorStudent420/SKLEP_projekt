@@ -1,0 +1,21 @@
+/* Usunięto domyślne blokady szerokości z Vite (max-width: 1280px).
+  Teraz komponenty Material-UI (<Container maxWidth={false}>) 
+  mogą swobodnie rozciągać się na całą szerokość monitora!
+*/
+:root {
+  width: 100%;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 100vh;
+}
+
+#root {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
