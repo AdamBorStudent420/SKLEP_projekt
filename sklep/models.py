@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.core.validators import MinValueValidator, MaxValueValidator
+from ckeditor.fields import RichTextField
 
 
 class Klient(models.Model):
@@ -120,7 +121,7 @@ class Podkategoria(models.Model):
 class Towar(models.Model):
     nazwa = models.CharField(max_length=255)
     producent = models.CharField(max_length=100, blank=True, null=True)
-    opis = models.TextField(blank=True, null=True)
+    opis = RichTextField(blank=True, null=True)
     zdjecie = models.ImageField(upload_to="towary/", null=True, blank=True)
     cena_jednostkowa = models.DecimalField(max_digits=10, decimal_places=2)
     cena_promocyjna = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)

@@ -7,7 +7,7 @@ import {
   Radio, RadioGroup, FormControlLabel, FormControl, Snackbar,
   Stepper, Step, StepLabel, Checkbox, Paper, MenuItem
 } from '@mui/material';
-import { ShoppingCart, Laptop, Cpu, X, User, LogOut, Plus, Minus, Trash2, CreditCard, CheckCircle, Truck, Tag, ArrowLeft, ChevronRight } from 'lucide-react';
+import { ShoppingCart, Laptop, Cpu, X, User, LogOut, Plus, Minus, Trash2, CreditCard, CheckCircle, Truck, Tag, ArrowLeft, ChevronRight, Search } from 'lucide-react';
 
 // --- MOTYW APLIKACJI ---
 const darkTheme = createTheme({
@@ -50,6 +50,7 @@ export default function App() {
   const [selectedSubcategoryId, setSelectedSubcategoryId] = useState(null);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const [user, setUser] = useState(null);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
@@ -282,36 +283,148 @@ export default function App() {
     return `${API_BASE_URL}${imagePath}`;
   };
 
+  const renderVerticalProductCard = (product) => (
+    <Card key={product.id} sx={{ height: 350, width: 250, display: 'flex', flexDirection: 'column', transition: 'transform 0.2s', cursor: 'pointer', flexShrink: 0, '&:hover': { transform: 'translateY(-5px)', boxShadow: '0 8px 24px rgba(0,230,118,0.2)', borderColor: '#2f00ffff', borderWidth: 1, borderStyle: 'solid' } }} onClick={() => { setSelectedProduct(product); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>
+      <Box sx={{ p: 1.5, pb: 0, flexShrink: 0 }}>
+        <Box sx={{ height: 160, bgcolor: '#ffffff', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', p: 1, overflow: 'hidden' }}>
+          <img src={getImageUrl(product.zdjecie)} alt={product.nazwa} style={{ maxWidth: '100%', maxHeight: '100%', width: 'auto', height: 'auto', objectFit: 'contain' }} />
+        </Box>
+      </Box>
+
+      <CardContent sx={{ display: 'flex', flexDirection: 'column', p: 1.5, pb: 0, flexGrow: 1 }}>
+        <Box sx={{ height: 20, mb: 0.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="caption" color="secondary" sx={{ fontWeight: 600, lineHeight: 1, textTransform: 'uppercase' }}>{product.kategoria}</Typography>
+          {product.cena_promocyjna && <Chip label="Promocja" color="primary" sx={{ height: 16, fontSize: '0.6rem' }} />}
+        </Box>
+
+        <Typography variant="subtitle2" component="h2" title={product.nazwa}
+          sx={{ overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', lineHeight: 1.3, height: '2.6em', mb: 1, fontWeight: 700 }}>
+          {product.nazwa}
+        </Typography>
+
+        <Box sx={{ height: 44, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', mt: 'auto' }}>
+          {product.cena_promocyjna ? (
+            <>
+              <Typography variant="caption" sx={{ textDecoration: 'line-through', color: 'text.secondary', lineHeight: 1, mb: 0.25 }}>{product.cena_jednostkowa.toFixed(2)} zł</Typography>
+              <Typography variant="subtitle1" color="primary.main" sx={{ fontWeight: 700, lineHeight: 1 }}>{product.cena_promocyjna.toFixed(2)} zł</Typography>
+            </>
+          ) : (
+            <Typography variant="subtitle1" color="primary.main" sx={{ fontWeight: 700, lineHeight: 1 }}>{product.cena_jednostkowa.toFixed(2)} zł</Typography>
+          )}
+        </Box>
+      </CardContent>
+
+      <CardActions sx={{ p: 1.5, pt: 0.5, mt: 0, justifyContent: 'flex-end', flexShrink: 0 }}>
+        {product.ilosc_dostepna === 0 && <Chip label="Brak" color="error" sx={{ height: 20, fontSize: '0.6rem', mr: 'auto' }} variant="outlined" />}
+        <Button size="small" variant={product.ilosc_dostepna > 0 ? "contained" : "outlined"} color="primary" disabled={product.ilosc_dostepna === 0} onClick={(e) => { e.stopPropagation(); handleAddToCart(product); }} startIcon={<ShoppingCart size={16} />}>
+          {product.ilosc_dostepna > 0 ? 'Do koszyka' : 'Brak'}
+        </Button>
+      </CardActions>
+    </Card>
+  );
+
   return (
     <ThemeProvider theme={darkTheme}>
       <CssBaseline />
 
       {/* --- PASEK NAWIGACJI --- */}
       <AppBar position="sticky" elevation={0} sx={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-        <Toolbar>
-          <Cpu color="#ffffffff" size={28} style={{ marginRight: '12px' }} />
-          <Typography
-            variant="h6"
-            component="div"
-            sx={{ flexGrow: 1, letterSpacing: 1, cursor: 'pointer' }}
-            onClick={() => { setSelectedCategoryId(null); setSelectedSubcategoryId(null); setSelectedProduct(null); }}
-          >
-            SKLEP<span style={{ color: '#ffffffff' }}> KOMPUTEROWY</span>
-          </Typography>
-          {user ? (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mr: 2 }}>
-              <Typography variant="body1" sx={{ color: 'text.secondary', display: { xs: 'none', sm: 'block' } }}>
-                Witaj, <span style={{ color: '#fff', fontWeight: 'bold' }}>{user.username}</span>
-              </Typography>
-              <IconButton color="inherit" onClick={handleLogout} title="Wyloguj się"><LogOut size={20} /></IconButton>
+        <Container sx={{ px: { xs: 2, sm: 4 }, width: { xs: '100%', md: '85%', lg: '80%', xl: '75%' }, margin: '0 auto', maxWidth: 'none' }}>
+          <Toolbar disableGutters>
+            <Cpu color="#ffffffff" size={28} style={{ marginRight: '12px' }} />
+            <Typography
+              variant="h6"
+              component="div"
+              sx={{ letterSpacing: 1, cursor: 'pointer', display: { xs: 'none', md: 'block' }, mr: { xs: 2, md: 4 } }}
+              onClick={() => { setSelectedCategoryId(null); setSelectedSubcategoryId(null); setSelectedProduct(null); setSearchQuery(''); }}
+            >
+              SKLEP<span style={{ color: '#ffffffff' }}> KOMPUTEROWY</span>
+            </Typography>
+
+            {/* POLE WYSZUKIWANIA */}
+            <Box sx={{ position: 'relative', width: { xs: '100%', sm: 300, lg: 400 }, mr: 'auto' }}>
+              <TextField
+                size="small"
+                fullWidth
+                placeholder="Szukaj produktu..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                sx={{
+                  bgcolor: '#ffffff',
+                  borderRadius: 2,
+                  '& .MuiOutlinedInput-root': {
+                    color: '#000000',
+                    '& fieldset': { border: 'none' },
+                    '&:hover fieldset': { border: '1px solid rgba(0,0,0,0.3)' },
+                    '&.Mui-focused fieldset': { border: '1px solid #1976d2' }
+                  }
+                }}
+                InputProps={{
+                  startAdornment: <Search size={18} style={{ marginRight: 8, color: 'rgba(0,0,0,0.5)' }} />,
+                }}
+              />
+              {/* WYNIKI WYSZUKIWANIA (DROPDOWN) */}
+              {searchQuery.trim() !== '' && (
+                <Paper
+                  elevation={6}
+                  sx={{
+                    position: 'absolute', top: '100%', left: 0, right: 0, mt: 1,
+                    maxHeight: 400, overflowY: 'auto', zIndex: 9999,
+                    bgcolor: 'background.paper', borderRadius: 2,
+                    border: '1px solid rgba(255,255,255,0.1)'
+                  }}
+                >
+                  {products.filter(p => p.nazwa.toLowerCase().includes(searchQuery.toLowerCase())).length > 0 ? (
+                    <Box component="ul" sx={{ listStyle: 'none', m: 0, p: 1 }}>
+                      {products.filter(p => p.nazwa.toLowerCase().includes(searchQuery.toLowerCase())).map(product => (
+                        <Box component="li" key={product.id}
+                          sx={{
+                            display: 'flex', alignItems: 'center', gap: 2, p: 1,
+                            cursor: 'pointer', borderRadius: 1,
+                            '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' }
+                          }}
+                          onClick={() => {
+                            setSelectedProduct(product);
+                            setSearchQuery('');
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                          }}
+                        >
+                          <Box component="img" src={getImageUrl(product.zdjecie)} sx={{ width: 40, height: 40, objectFit: 'contain', bgcolor: 'white', borderRadius: 1 }} />
+                          <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                            <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{product.nazwa}</Typography>
+                            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', lineHeight: 1 }}>{product.kategoria}</Typography>
+                          </Box>
+                          <Typography variant="body2" color="primary.main" sx={{ fontWeight: 'bold', whiteSpace: 'nowrap' }}>
+                            {(product.cena_promocyjna || product.cena_jednostkowa).toFixed(2)} zł
+                          </Typography>
+                        </Box>
+                      ))}
+                    </Box>
+                  ) : (
+                    <Box sx={{ p: 2, textAlign: 'center' }}>
+                      <Typography variant="body2" color="text.secondary">Brak wyników</Typography>
+                    </Box>
+                  )}
+                </Paper>
+              )}
             </Box>
-          ) : (
-            <Button color="inherit" startIcon={<User size={20} />} onClick={() => setIsLoginOpen(true)} sx={{ mr: 2 }}>Zaloguj</Button>
-          )}
-          <IconButton color="inherit" onClick={toggleCart} sx={{ ml: 2 }}>
-            <Badge badgeContent={cartItemsCount} color="primary"><ShoppingCart /></Badge>
-          </IconButton>
-        </Toolbar>
+
+            {/* PRAWA STRONA */}
+            {user ? (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mr: 2 }}>
+                <Typography variant="body1" sx={{ color: 'text.secondary', display: { xs: 'none', sm: 'block' } }}>
+                  Witaj, <span style={{ color: '#fff', fontWeight: 'bold' }}>{user.username}</span>
+                </Typography>
+                <IconButton color="inherit" onClick={handleLogout} title="Wyloguj się"><LogOut size={20} /></IconButton>
+              </Box>
+            ) : (
+              <Button color="inherit" startIcon={<User size={20} />} onClick={() => setIsLoginOpen(true)} sx={{ mr: 2 }}>Zaloguj</Button>
+            )}
+            <IconButton color="inherit" onClick={toggleCart} sx={{ ml: 2 }}>
+              <Badge badgeContent={cartItemsCount} color="primary"><ShoppingCart /></Badge>
+            </IconButton>
+          </Toolbar>
+        </Container>
       </AppBar>
 
       {/* --- GŁÓWNA ZAWARTOŚĆ --- */}
@@ -399,9 +512,15 @@ export default function App() {
                     {selectedProduct.opis && (
                       <Box sx={{ mt: 4 }}>
                         <Typography variant="h5" sx={{ mb: 2, borderBottom: '1px solid rgba(255,255,255,0.1)', pb: 1 }}>Opis produktu</Typography>
-                        <Typography variant="body1" sx={{ color: 'text.primary', lineHeight: 1.7, whiteSpace: 'pre-line' }}>
-                          {selectedProduct.opis}
-                        </Typography>
+                        <Box sx={{
+                          color: 'text.primary',
+                          lineHeight: 1.7,
+                          '& ul': { ml: 4, mb: 2, listStyleType: 'disc' },
+                          '& ol': { ml: 4, mb: 2, listStyleType: 'decimal' },
+                          '& li': { mb: 0.5 },
+                          '& p': { mb: 1 }
+                        }}
+                          dangerouslySetInnerHTML={{ __html: selectedProduct.opis }} />
                       </Box>
                     )}
                   </Box>
@@ -409,7 +528,7 @@ export default function App() {
               </Grid>
             </Paper>
           </Box>
-        ) : !loading && !error && selectedCategoryId === null ? (
+        ) : !loading && !error ? (
           <>
             <Typography variant="h4" sx={{ mb: 4, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 2, color: '#000000' }}>
               <Laptop size={32} color="#2979ff" /> Kategorie
@@ -427,9 +546,11 @@ export default function App() {
                         transition: '0.3s',
                         bgcolor: 'background.paper',
                         borderRadius: '12px',
-                        '&:hover': { transform: 'translateY(-3px)', borderColor: '#1612e2ff', borderWidth: 1, borderStyle: 'solid', boxShadow: '0 4px 20px rgba(0,230,118,0.2)' }
+                        border: selectedCategoryId === cat.id ? '2px solid #2979ff' : '2px solid transparent',
+                        boxShadow: selectedCategoryId === cat.id ? '0 4px 20px rgba(41, 121, 255, 0.3)' : 'none',
+                        '&:hover': { transform: 'translateY(-3px)', borderColor: '#1612e2ff', borderWidth: 2, borderStyle: 'solid', boxShadow: '0 4px 20px rgba(0,230,118,0.2)' }
                       }}
-                      onClick={() => { setSelectedCategoryId(cat.id); setSelectedSubcategoryId(null); }}
+                      onClick={() => { setSelectedCategoryId(cat.id === selectedCategoryId ? null : cat.id); setSelectedSubcategoryId(null); }}
                     >
                       <CardContent sx={{ textAlign: 'center', p: 1.5, '&:last-child': { pb: 1.5 } }}>
                         <Typography variant="subtitle1" fontWeight="bold" color="text.primary" sx={{ fontSize: { xs: '0.85rem', sm: '0.95rem' }, lineHeight: 1.2 }}>
@@ -442,177 +563,165 @@ export default function App() {
               </Grid>
             )}
 
-            <Typography variant="h4" sx={{ mb: 4, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 2, color: '#000000' }}>
-              <Tag size={32} color="#2979ff" /> Polecane Produkty
-            </Typography>
+            {selectedCategoryId === null ? (
+              <>
+                <Typography variant="h4" sx={{ mb: 4, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 2, color: '#000000' }}>
+                  <Tag size={32} color="#2979ff" /> Polecane Produkty
+                </Typography>
 
-            {products.length === 0 && <Alert severity="info">Brak produktów w bazie. Dodaj je w Django!</Alert>}
+                {products.length === 0 && <Alert severity="info">Brak produktów w bazie. Dodaj je w Django!</Alert>}
 
-            {/* Zmieniono na Flex-box ze sztywnymi rozmiarami, by uzyskać "kwadratowy" i równy wygląd */}
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, justifyContent: 'center' }}>
-              {products.map((product) => (
-                <Card key={product.id} sx={{ height: 350, width: 250, display: 'flex', flexDirection: 'column', transition: 'transform 0.2s', cursor: 'pointer', flexShrink: 0, '&:hover': { transform: 'translateY(-5px)', boxShadow: '0 8px 24px rgba(0,230,118,0.2)', borderColor: '#2f00ffff', borderWidth: 1, borderStyle: 'solid' } }} onClick={() => { setSelectedProduct(product); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>
-                  {/* Zdjęcie - stała wysokość nieco niższa by proporcje działały w 350px */}
-                  <Box sx={{ p: 1.5, pb: 0, flexShrink: 0 }}>
-                    <Box sx={{ height: 160, bgcolor: '#ffffff', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', p: 1, overflow: 'hidden' }}>
-                      <img src={getImageUrl(product.zdjecie)} alt={product.nazwa} style={{ maxWidth: '100%', maxHeight: '100%', width: 'auto', height: 'auto', objectFit: 'contain' }} />
+                {/* Zmieniono na Flex-box ze sztywnymi rozmiarami, by uzyskać "kwadratowy" i równy wygląd */}
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, justifyContent: 'flex-start' }}>
+                  {products.slice(0, 8).map(renderVerticalProductCard)}
+                </Box>
+
+                {/* Sekcje karuzeli dla poszczególnych kategorii. */}
+                {categories.map(cat => {
+                  const catProducts = products.filter(p => p.kategoria_id === cat.id).slice(0, 10);
+                  if (catProducts.length === 0) return null;
+
+                  return (
+                    <Box key={`cat-section-${cat.id}`} sx={{ mt: 8 }}>
+                      <Typography variant="h4" sx={{ mb: 3, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 2, color: '#000000' }}>
+                        {cat.nazwa_kategorii}
+                      </Typography>
+
+                      <Box sx={{
+                        display: 'flex',
+                        overflowX: 'auto',
+                        gap: 3,
+                        pb: 2,
+                        pt: 1,
+                        px: 1,
+                        width: '100%',
+                        scrollSnapType: 'x mandatory',
+                        '&::-webkit-scrollbar': { height: 8 },
+                        '&::-webkit-scrollbar-thumb': { backgroundColor: '#4e82b9', borderRadius: 4 },
+                        '&::-webkit-scrollbar-track': { backgroundColor: 'rgba(0,0,0,0.05)', borderRadius: 4 },
+                        '& > *': { scrollSnapAlign: 'start' }
+                      }}>
+                        {catProducts.map(renderVerticalProductCard)}
+                      </Box>
                     </Box>
+                  );
+                })}
+              </>
+            ) : (
+              /* WIDOK WYBRANEJ KATEGORII - Morele style */
+              <Box>
+                {/* Przycisk Filtruj - tylko mobile */}
+                <Box sx={{ display: { xs: 'flex', md: 'none' }, mb: 2 }}>
+                  <Button
+                    variant="outlined"
+                    startIcon={<ChevronRight size={18} />}
+                    onClick={() => setIsFilterDrawerOpen(true)}
+                    sx={{ color: '#000000', borderColor: 'rgba(0,0,0,0.3)' }}
+                  >
+                    Filtruj / Podkategorie
+                  </Button>
+                </Box>
+
+                {/* Mobile filter Drawer */}
+                <Drawer anchor="left" open={isFilterDrawerOpen} onClose={() => setIsFilterDrawerOpen(false)}>
+                  <Box sx={{ width: 260, p: 3, bgcolor: 'background.default', height: '100%' }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                      <Typography variant="h6" sx={{ color: '#000000', fontWeight: 700 }}>Filtruj</Typography>
+                      <IconButton onClick={() => setIsFilterDrawerOpen(false)}><X /></IconButton>
+                    </Box>
+                    <Divider sx={{ mb: 2 }} />
+                    <Button fullWidth variant={selectedSubcategoryId === null ? 'contained' : 'text'} color="primary"
+                      sx={{ justifyContent: 'flex-start', alignItems: 'flex-start', textAlign: 'left', mb: 1, color: '#000000' }}
+                      onClick={() => { setSelectedSubcategoryId(null); setIsFilterDrawerOpen(false); }}>
+                      Wszystkie modele
+                    </Button>
+                    {categories.find(c => c.id === selectedCategoryId)?.podkategorie.map(sub => (
+                      <Button key={sub.id} fullWidth variant={selectedSubcategoryId === sub.id ? 'contained' : 'text'} color="secondary"
+                        sx={{ justifyContent: 'flex-start', alignItems: 'flex-start', textAlign: 'left', mb: 1, color: '#000000' }}
+                        onClick={() => { setSelectedSubcategoryId(sub.id); setIsFilterDrawerOpen(false); }}>
+                        <ChevronRight size={16} style={{ marginRight: 8, flexShrink: 0 }} /> {sub.nazwa}
+                      </Button>
+                    ))}
+                  </Box>
+                </Drawer>
+
+                {/* Główny układ: sidebar + produkty */}
+                <Box sx={{ display: 'flex', gap: 3, alignItems: 'flex-start' }}>
+                  {/* Sidebar - tylko desktop */}
+                  <Box sx={{ display: { xs: 'none', md: 'block' }, width: 210, flexShrink: 0 }}>
+                    <Paper sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 2, position: 'sticky', top: '80px' }}>
+                      <Typography variant="h6" sx={{ mb: 2, pb: 1, borderBottom: '1px solid rgba(0,0,0,0.1)', fontWeight: 700 }}>Filtruj</Typography>
+                      <Button fullWidth variant={selectedSubcategoryId === null ? 'contained' : 'text'} color="primary"
+                        sx={{ justifyContent: 'flex-start', alignItems: 'flex-start', textAlign: 'left', mb: 0.5 }}
+                        onClick={() => setSelectedSubcategoryId(null)}>
+                        Wszystkie modele
+                      </Button>
+                      {categories.find(c => c.id === selectedCategoryId)?.podkategorie.map(sub => (
+                        <Button key={sub.id} fullWidth variant={selectedSubcategoryId === sub.id ? 'contained' : 'text'} color="secondary"
+                          sx={{ justifyContent: 'flex-start', alignItems: 'flex-start', textAlign: 'left', mb: 0.5 }}
+                          onClick={() => setSelectedSubcategoryId(sub.id)}>
+                          <ChevronRight size={16} style={{ marginRight: 6, flexShrink: 0 }} /> {sub.nazwa}
+                        </Button>
+                      ))}
+                    </Paper>
                   </Box>
 
-                  {/* Treść karty */}
-                  <CardContent sx={{ display: 'flex', flexDirection: 'column', p: 1.5, pb: 0, flexGrow: 1 }}>
-                    <Box sx={{ height: 20, mb: 0.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Typography variant="caption" color="secondary" sx={{ fontWeight: 600, lineHeight: 1, textTransform: 'uppercase' }}>{product.kategoria}</Typography>
-                      {product.cena_promocyjna && <Chip label="Promocja" color="primary" sx={{ height: 16, fontSize: '0.6rem' }} />}
-                    </Box>
+                  {/* Lista produktów - styl profesjonalny */}
+                  <Box sx={{ flexGrow: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    {products
+                      .filter(p => p.kategoria_id === selectedCategoryId && (selectedSubcategoryId === null || p.podkategoria_id === selectedSubcategoryId))
+                      .map((product) => (
+                        <Card key={product.id}
+                          sx={{ display: 'flex', flexDirection: 'row', alignItems: 'stretch', cursor: 'pointer', transition: 'box-shadow 0.2s', '&:hover': { boxShadow: '0 4px 20px rgba(0,0,0,0.18)' } }}
+                          onClick={() => { setSelectedProduct(product); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>
 
-                    <Typography variant="subtitle2" component="h2" title={product.nazwa}
-                      sx={{ overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', lineHeight: 1.3, height: '2.6em', mb: 1, fontWeight: 700 }}>
-                      {product.nazwa}
-                    </Typography>
-
-                    <Box sx={{ height: 44, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', mt: 'auto' }}>
-                      {product.cena_promocyjna ? (
-                        <>
-                          <Typography variant="caption" sx={{ textDecoration: 'line-through', color: 'text.secondary', lineHeight: 1, mb: 0.25 }}>{product.cena_jednostkowa.toFixed(2)} zł</Typography>
-                          <Typography variant="subtitle1" color="primary.main" sx={{ fontWeight: 700, lineHeight: 1 }}>{product.cena_promocyjna.toFixed(2)} zł</Typography>
-                        </>
-                      ) : (
-                        <Typography variant="subtitle1" color="primary.main" sx={{ fontWeight: 700, lineHeight: 1 }}>{product.cena_jednostkowa.toFixed(2)} zł</Typography>
-                      )}
-                    </Box>
-                  </CardContent>
-
-                  <CardActions sx={{ p: 1.5, pt: 0.5, mt: 0, justifyContent: 'flex-end', flexShrink: 0 }}>
-                    {product.ilosc_dostepna === 0 && <Chip label="Brak" color="error" sx={{ height: 20, fontSize: '0.6rem', mr: 'auto' }} variant="outlined" />}
-                    <Button size="small" variant={product.ilosc_dostepna > 0 ? "contained" : "outlined"} color="primary" disabled={product.ilosc_dostepna === 0} onClick={(e) => { e.stopPropagation(); handleAddToCart(product); }} startIcon={<ShoppingCart size={16} />}>
-                      {product.ilosc_dostepna > 0 ? 'Do koszyka' : 'Brak'}
-                    </Button>
-                  </CardActions>
-                </Card>
-              ))}
-            </Box>
-          </>
-        ) : !loading && !error && selectedCategoryId !== null && (
-          /* WIDOK WYBRANEJ KATEGORII - Morele style */
-          <Box>
-            <Button startIcon={<ArrowLeft />} onClick={() => setSelectedCategoryId(null)} sx={{ mb: 2, color: '#000000' }}>
-              Wróć do strony głównej
-            </Button>
-            <Typography variant="h4" sx={{ mb: 3, fontWeight: 700, color: '#000000' }}>
-              {categories.find(c => c.id === selectedCategoryId)?.nazwa_kategorii}
-            </Typography>
-
-            {/* Przycisk Filtruj - tylko mobile */}
-            <Box sx={{ display: { xs: 'flex', md: 'none' }, mb: 2 }}>
-              <Button
-                variant="outlined"
-                startIcon={<ChevronRight size={18} />}
-                onClick={() => setIsFilterDrawerOpen(true)}
-                sx={{ color: '#000000', borderColor: 'rgba(0,0,0,0.3)' }}
-              >
-                Filtruj / Podkategorie
-              </Button>
-            </Box>
-
-            {/* Mobile filter Drawer */}
-            <Drawer anchor="left" open={isFilterDrawerOpen} onClose={() => setIsFilterDrawerOpen(false)}>
-              <Box sx={{ width: 260, p: 3, bgcolor: 'background.default', height: '100%' }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                  <Typography variant="h6" sx={{ color: '#000000', fontWeight: 700 }}>Filtruj</Typography>
-                  <IconButton onClick={() => setIsFilterDrawerOpen(false)}><X /></IconButton>
-                </Box>
-                <Divider sx={{ mb: 2 }} />
-                <Button fullWidth variant={selectedSubcategoryId === null ? 'contained' : 'text'} color="primary"
-                  sx={{ justifyContent: 'flex-start', alignItems: 'flex-start', textAlign: 'left', mb: 1, color: '#000000' }}
-                  onClick={() => { setSelectedSubcategoryId(null); setIsFilterDrawerOpen(false); }}>
-                  Wszystkie modele
-                </Button>
-                {categories.find(c => c.id === selectedCategoryId)?.podkategorie.map(sub => (
-                  <Button key={sub.id} fullWidth variant={selectedSubcategoryId === sub.id ? 'contained' : 'text'} color="secondary"
-                    sx={{ justifyContent: 'flex-start', alignItems: 'flex-start', textAlign: 'left', mb: 1, color: '#000000' }}
-                    onClick={() => { setSelectedSubcategoryId(sub.id); setIsFilterDrawerOpen(false); }}>
-                    <ChevronRight size={16} style={{ marginRight: 8, flexShrink: 0 }} /> {sub.nazwa}
-                  </Button>
-                ))}
-              </Box>
-            </Drawer>
-
-            {/* Główny układ: sidebar + produkty */}
-            <Box sx={{ display: 'flex', gap: 3, alignItems: 'flex-start' }}>
-              {/* Sidebar - tylko desktop */}
-              <Box sx={{ display: { xs: 'none', md: 'block' }, width: 210, flexShrink: 0 }}>
-                <Paper sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 2, position: 'sticky', top: '80px' }}>
-                  <Typography variant="h6" sx={{ mb: 2, pb: 1, borderBottom: '1px solid rgba(0,0,0,0.1)', fontWeight: 700 }}>Filtruj</Typography>
-                  <Button fullWidth variant={selectedSubcategoryId === null ? 'contained' : 'text'} color="primary"
-                    sx={{ justifyContent: 'flex-start', alignItems: 'flex-start', textAlign: 'left', mb: 0.5 }}
-                    onClick={() => setSelectedSubcategoryId(null)}>
-                    Wszystkie modele
-                  </Button>
-                  {categories.find(c => c.id === selectedCategoryId)?.podkategorie.map(sub => (
-                    <Button key={sub.id} fullWidth variant={selectedSubcategoryId === sub.id ? 'contained' : 'text'} color="secondary"
-                      sx={{ justifyContent: 'flex-start', alignItems: 'flex-start', textAlign: 'left', mb: 0.5 }}
-                      onClick={() => setSelectedSubcategoryId(sub.id)}>
-                      <ChevronRight size={16} style={{ marginRight: 6, flexShrink: 0 }} /> {sub.nazwa}
-                    </Button>
-                  ))}
-                </Paper>
-              </Box>
-
-              {/* Lista produktów - styl profesjonalny */}
-              <Box sx={{ flexGrow: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {products
-                  .filter(p => p.kategoria_id === selectedCategoryId && (selectedSubcategoryId === null || p.podkategoria_id === selectedSubcategoryId))
-                  .map((product) => (
-                    <Card key={product.id}
-                      sx={{ display: 'flex', flexDirection: 'row', alignItems: 'stretch', cursor: 'pointer', transition: 'box-shadow 0.2s', '&:hover': { boxShadow: '0 4px 20px rgba(0,0,0,0.18)' } }}
-                      onClick={() => { setSelectedProduct(product); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>
-
-                      {/* Zdjęcie */}
-                      <Box sx={{ width: { xs: 110, sm: 160 }, flexShrink: 0, bgcolor: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', p: 1.5, borderRight: '1px solid rgba(0,0,0,0.07)' }}>
-                        <img src={getImageUrl(product.zdjecie)} alt={product.nazwa} style={{ maxWidth: '100%', maxHeight: 120, objectFit: 'contain' }} />
-                      </Box>
-
-                      {/* Środek: nazwa + kategoria */}
-                      <Box sx={{ flexGrow: 1, p: 2, display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0 }}>
-                        <Typography variant="caption" color="secondary" sx={{ fontWeight: 600, textTransform: 'uppercase' }}>{product.kategoria}</Typography>
-                        <Typography variant="subtitle1" component="h2" fontWeight={700} sx={{ mt: 0.5, lineHeight: 1.3, color: '#ffffff' }}>
-                          {product.nazwa}
-                        </Typography>
-                        {product.ilosc_dostepna === 0 && <Chip label="Brak w magazynie" color="error" size="small" variant="outlined" sx={{ mt: 1, width: 'fit-content' }} />}
-                        {product.ilosc_dostepna > 0 && <Typography variant="caption" sx={{ color: '#00ff00', mt: 0.5 }}>✓ Dostępny ({product.ilosc_dostepna} szt.)</Typography>}
-                      </Box>
-
-                      {/* Prawa strona: cena + przycisk */}
-                      <Box sx={{ flexShrink: 0, p: 2, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center', gap: 1.5, borderLeft: '1px solid rgba(0,0,0,0.07)', minWidth: { xs: 110, sm: 160 } }}>
-                        {product.cena_promocyjna ? (
-                          <Box sx={{ textAlign: 'right' }}>
-                            <Typography variant="caption" sx={{ textDecoration: 'line-through', color: 'text.secondary', display: 'block' }}>{product.cena_jednostkowa.toFixed(2)} zł</Typography>
-                            <Typography variant="h6" sx={{ fontWeight: 800, color: '#ffffff', lineHeight: 1 }}>{product.cena_promocyjna.toFixed(2)} zł</Typography>
+                          {/* Zdjęcie */}
+                          <Box sx={{ width: { xs: 110, sm: 160 }, flexShrink: 0, bgcolor: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', p: 1.5, borderRight: '1px solid rgba(0,0,0,0.07)' }}>
+                            <img src={getImageUrl(product.zdjecie)} alt={product.nazwa} style={{ maxWidth: '100%', maxHeight: 120, objectFit: 'contain' }} />
                           </Box>
-                        ) : (
-                          <Typography variant="h6" sx={{ fontWeight: 800, color: '#ffffff' }}>{product.cena_jednostkowa.toFixed(2)} zł</Typography>
-                        )}
-                        <Button
-                          size="small"
-                          variant={product.ilosc_dostepna > 0 ? 'contained' : 'outlined'}
-                          color="primary"
-                          disabled={product.ilosc_dostepna === 0}
-                          onClick={(e) => { e.stopPropagation(); handleAddToCart(product); }}
-                          startIcon={<ShoppingCart size={14} />}
-                        >
-                          {product.ilosc_dostepna > 0 ? 'Do koszyka' : 'Brak'}
-                        </Button>
-                      </Box>
-                    </Card>
-                  ))}
-                {products.filter(p => p.kategoria_id === selectedCategoryId && (selectedSubcategoryId === null || p.podkategoria_id === selectedSubcategoryId)).length === 0 && (
-                  <Alert severity="info">Brak produktów w wybranej kategorii/podkategorii.</Alert>
-                )}
+
+                          {/* Środek: nazwa + kategoria */}
+                          <Box sx={{ flexGrow: 1, p: 2, display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0 }}>
+                            <Typography variant="caption" color="secondary" sx={{ fontWeight: 600, textTransform: 'uppercase' }}>{product.kategoria}</Typography>
+                            <Typography variant="subtitle1" component="h2" fontWeight={700} sx={{ mt: 0.5, lineHeight: 1.3, color: '#ffffff' }}>
+                              {product.nazwa}
+                            </Typography>
+                            {product.ilosc_dostepna === 0 && <Chip label="Brak w magazynie" color="error" size="small" variant="outlined" sx={{ mt: 1, width: 'fit-content' }} />}
+                            {product.ilosc_dostepna > 0 && <Typography variant="caption" sx={{ color: '#00ff00', mt: 0.5 }}>✓ Dostępny ({product.ilosc_dostepna} szt.)</Typography>}
+                          </Box>
+
+                          {/* Prawa strona: cena + przycisk */}
+                          <Box sx={{ flexShrink: 0, p: 2, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center', gap: 1.5, borderLeft: '1px solid rgba(0,0,0,0.07)', minWidth: { xs: 110, sm: 160 } }}>
+                            {product.cena_promocyjna ? (
+                              <Box sx={{ textAlign: 'right' }}>
+                                <Typography variant="caption" sx={{ textDecoration: 'line-through', color: 'text.secondary', display: 'block' }}>{product.cena_jednostkowa.toFixed(2)} zł</Typography>
+                                <Typography variant="h6" sx={{ fontWeight: 800, color: '#ffffff', lineHeight: 1 }}>{product.cena_promocyjna.toFixed(2)} zł</Typography>
+                              </Box>
+                            ) : (
+                              <Typography variant="h6" sx={{ fontWeight: 800, color: '#ffffff' }}>{product.cena_jednostkowa.toFixed(2)} zł</Typography>
+                            )}
+                            <Button
+                              size="small"
+                              variant={product.ilosc_dostepna > 0 ? 'contained' : 'outlined'}
+                              color="primary"
+                              disabled={product.ilosc_dostepna === 0}
+                              onClick={(e) => { e.stopPropagation(); handleAddToCart(product); }}
+                              startIcon={<ShoppingCart size={14} />}
+                            >
+                              {product.ilosc_dostepna > 0 ? 'Do koszyka' : 'Brak'}
+                            </Button>
+                          </Box>
+                        </Card>
+                      ))}
+                    {products.filter(p => p.kategoria_id === selectedCategoryId && (selectedSubcategoryId === null || p.podkategoria_id === selectedSubcategoryId)).length === 0 && (
+                      <Alert severity="info">Brak produktów w wybranej kategorii/podkategorii.</Alert>
+                    )}
+                  </Box>
+                </Box>
               </Box>
-            </Box>
-          </Box>
-        )}
+            )}
+          </>
+        ) : null}
       </Container>
 
       {/* --- PANEL KOSZYKA BOCZNEGO --- */}

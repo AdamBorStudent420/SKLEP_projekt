@@ -198,7 +198,13 @@ class AtrybutAdmin(admin.ModelAdmin):
     list_filter = (AtrybutKategoriaFilter, AtrybutPodkategoriaFilter)
 
 admin.site.register(Kategoria)
-admin.site.register(Podkategoria)
+
+@admin.register(Podkategoria)
+class PodkategoriaAdmin(admin.ModelAdmin):
+    list_display = ('nazwa', 'kategoria')
+    list_filter = ('kategoria',)
+    search_fields = ('nazwa', 'kategoria__nazwa_kategorii')
+
 admin.site.register(RodzajDostawy)
 admin.site.register(Dostawa)
 admin.site.register(Rabat)
