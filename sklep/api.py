@@ -8,12 +8,38 @@ from django.conf import settings
 from ninja import NinjaAPI, Schema
 
 from .models import Towar, Klient, Dostawa, Rabat, Kategoria
+from ninja.security import HttpBearer
 
-# Inicjalizacja instancji API
-api = NinjaAPI(title="Sklep Komputerowy API", version="1.0.0")
 
 # ==========================================
-# SCHEMATY DANYCH (Sposób formatowania JSON)
+# JWT – używany tylko dla zamówień
+# ==========================================
+
+class JWTAuth(HttpBearer):
+    def authenticate(self, request, token):
+        try:
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+            return payload
+        except Exception:
+            return None
+
+auth = JWTAuth()
+
+
+# ==========================================
+# API BEZ GLOBALNEGO AUTH
+# ==========================================
+
+api = NinjaAPI(title="Sklep Komputerowy API", version="1.0.0")
+
+
+# Router zamówień — JEDYNY chroniony JWT
+from .orders import router as orders_router
+api.add_router("/zamowienia", orders_router, auth=auth)
+
+
+# ==========================================
+# SCHEMATY (bez zmian)
 # ==========================================
 
 class AtrybutSchema(Schema):
@@ -71,7 +97,7 @@ class ProduktSchema(Schema):
     @staticmethod
     def resolve_atrybuty(obj):
         return [
-            {"nazwa": wa.atrybut.nazwa, "wartosc": wa.wartosc} 
+            {"nazwa": wa.atrybut.nazwa, "wartosc": wa.wartosc}
             for wa in obj.wartosci_atrybutow.all()
         ]
 
@@ -91,12 +117,11 @@ class DostawaSchema(Schema):
     id: int
     nazwa: str
     cena: float
-    
+
     @staticmethod
     def resolve_nazwa(obj):
-        # Wyciągamy nazwę z powiązanego modelu RodzajDostawy
         return obj.rodzaj.nazwa
-        
+
     @staticmethod
     def resolve_cena(obj):
         return float(obj.cena_dostawy)
@@ -107,75 +132,66 @@ class RabatSchema(Schema):
     procent: float
     aktywny: bool
 
+
 # ==========================================
-# ENDPOINTY (Trasy API)
+# PUBLICZNE ENDPOINTY (bez zmian)
 # ==========================================
 
 @api.get("/produkty/", response=List[ProduktSchema])
 def get_produkty(request):
-    """Pobieranie asortymentu wraz ze szczegółami i optymalizacją zapytań SQL."""
-    produkty = Towar.objects.select_related(
-        'kategoria', 
-        'podkategoria',
-        'magazyn'
+    return Towar.objects.select_related(
+        'kategoria', 'podkategoria', 'magazyn'
     ).prefetch_related(
         'wartosci_atrybutow__atrybut'
     ).all()
-    return produkty
 
 @api.get("/kategorie/", response=List[KategoriaSchema])
 def get_kategorie(request):
-    """Pobieranie drzewa kategorii i podkategorii."""
     return Kategoria.objects.prefetch_related('podkategorie').all()
 
 @api.get("/dostawy/", response=List[DostawaSchema])
 def get_dostawy(request):
-    """Pobieranie dostępnych metod dostawy."""
     return Dostawa.objects.select_related('rodzaj').all()
 
 @api.get("/rabaty/", response=List[RabatSchema])
 def get_rabaty(request):
-    """Pobieranie aktywnych kodów rabatowych."""
     return Rabat.objects.filter(aktywny=True)
+
+
+# ==========================================
+# LOGOWANIE – PUBLICZNE
+# ==========================================
 
 @api.post("/login/")
 def login(request, data: LoginSchema):
-    """Logowanie użytkownika i wydawanie tokena JWT."""
-    print(f"\n[DEBUG API] Otrzymano żądanie logowania dla: '{data.username}'")
-    
-    # Ekspercka diagnostyka środowiska
-    try:
-        print(f"[DEBUG API] Fizyczna ścieżka biblioteki jwt: {jwt.__file__}")
-    except Exception as e:
-        print(f"[DEBUG API] Nie można ustalić ścieżki jwt: {e}")
-
     user = authenticate(request, username=data.username, password=data.password)
-    
-    if user is not None:
-        print(f"[DEBUG API] Sukces! Hasło poprawne. Generowanie JWT dla: {user.username}\n")
-        payload = {
-            'user_id': user.id,
-            'username': user.username,
-            'exp': datetime.utcnow() + timedelta(days=1)
-        }
-        token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
-        return {"token": token, "username": user.username}
-    
-    print(f"[DEBUG API] BŁĄD: Nie znaleziono użytkownika '{data.username}' lub hasło jest błędne!\n")
-    return api.create_response(request, {"detail": "Błędne dane logowania"}, status=401)
+
+    if user is None:
+        return api.create_response(request, {"detail": "Błędne dane logowania"}, status=401)
+
+    payload = {
+        'user_id': user.id,
+        'username': user.username,
+        'exp': datetime.utcnow() + timedelta(days=1)
+    }
+    token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
+
+    return {"token": token, "username": user.username}
+
+
+# ==========================================
+# REJESTRACJA – PUBLICZNA
+# ==========================================
 
 @api.post("/register/")
 def register(request, data: RegisterSchema):
-    """Rejestracja nowego klienta i powiązanego konta w Django."""
-    print(f"\n[DEBUG API] Otrzymano żądanie rejestracji dla: '{data.username}'")
 
     if User.objects.filter(username=data.username).exists():
         return api.create_response(request, {"detail": "Użytkownik o takim loginie już istnieje."}, status=400)
-    
+
     if User.objects.filter(email=data.email).exists():
         return api.create_response(request, {"detail": "Ten adres e-mail jest już zajęty."}, status=400)
 
-    # 1. Tworzenie użytkownika systemowego (Django User) z szyfrowaniem hasła
     user = User.objects.create_user(
         username=data.username,
         password=data.password,
@@ -184,7 +200,6 @@ def register(request, data: RegisterSchema):
         last_name=data.nazwisko
     )
 
-    # 2. Tworzenie profilu Klienta w Twoim modelu
     Klient.objects.create(
         user=user,
         imie=data.imie,
@@ -193,13 +208,11 @@ def register(request, data: RegisterSchema):
         nr_tel=data.nr_tel
     )
 
-    # 3. Od razu logujemy nowo zarejestrowanego użytkownika (wydajemy token)
     payload = {
         'user_id': user.id,
         'username': user.username,
         'exp': datetime.utcnow() + timedelta(days=1)
     }
     token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
-    
-    print(f"[DEBUG API] Sukces! Utworzono konto i zalogowano: {user.username}\n")
+
     return {"token": token, "username": user.username}

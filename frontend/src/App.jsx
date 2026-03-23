@@ -204,44 +204,63 @@ export default function App() {
 
   const handlePrevStep = () => setActiveStep(prev => prev - 1);
 
-  const handlePlaceOrder = () => {
-    const pelnyNumer = `${checkoutData.kierunkowy} ${checkoutData.nr_tel}`;
+ const handlePlaceOrder = async () => {
+  const pelnyNumer = `${checkoutData.kierunkowy} ${checkoutData.nr_tel}`;
 
-    const orderPayload = {
-      is_guest: !user,
-      create_account: !user && checkoutData.haslo_rejestracja.trim() !== '',
-      haslo: checkoutData.haslo_rejestracja,
-      klient: {
-        imie: checkoutData.imie,
-        nazwisko: checkoutData.nazwisko,
-        email: checkoutData.email,
-        nr_tel: pelnyNumer
-      },
-      adres: {
-        ulica: checkoutData.ulica,
-        nr_domu: checkoutData.nr_domu,
-        miasto: checkoutData.miasto,
-        kod_pocztowy: checkoutData.kod_pocztowy
-      },
-      dostawa_id: checkoutData.id_dostawy,
-      rabat_id: discountApplied ? discountApplied.id : null,
-      metoda_platnosci: checkoutData.metoda_platnosci,
-      koszyk: cart.map(item => ({
-        towar_id: item.id,
-        ilosc: item.quantity,
-        cena_sprzedazy: item.cena_promocyjna || item.cena_jednostkowa
-      }))
-    };
-
-    console.log("WYSYŁAM ZAMÓWIENIE DO DJANGO:", JSON.stringify(orderPayload, null, 2));
-
-    setOrderSuccess(true);
-    setCart([]);
-    setIsCheckoutOpen(false);
-    setActiveStep(0);
-    setDiscountApplied(null);
+  const orderPayload = {
+    is_guest: !user,
+    create_account: !user && checkoutData.haslo_rejestracja.trim() !== '',
+    haslo: checkoutData.haslo_rejestracja,
+    klient: {
+      imie: checkoutData.imie,
+      nazwisko: checkoutData.nazwisko,
+      email: checkoutData.email,
+      nr_tel: pelnyNumer
+    },
+    adres: {
+      ulica: checkoutData.ulica,
+      nr_domu: checkoutData.nr_domu,
+      miasto: checkoutData.miasto,
+      kod_pocztowy: checkoutData.kod_pocztowy
+    },
+    dostawa_id: checkoutData.id_dostawy,
+    rabat_id: discountApplied ? discountApplied.id : null,
+    metoda_platnosci: checkoutData.metoda_platnosci,
+    koszyk: cart.map(item => ({
+      towar_id: item.id,
+      ilosc: item.quantity,
+      cena_sprzedazy: item.cena_promocyjna || item.cena_jednostkowa
+    }))
   };
 
+try {
+  const response = await fetch(`${API_BASE_URL}/api/zamowienia/`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + localStorage.getItem("token")
+    },
+    body: JSON.stringify(orderPayload)
+  });
+
+  if (!response.ok) {
+    const err = await response.json();
+    console.error("Błąd zamówienia:", err);
+    alert("Nie udało się złożyć zamówienia.");
+    return;
+  }
+
+  setOrderSuccess(true);
+  setCart([]);
+  setIsCheckoutOpen(false);
+  setActiveStep(0);
+  setDiscountApplied(null);
+
+} catch (error) {
+  console.error("Błąd połączenia:", error);
+  alert("Błąd połączenia z serwerem.");
+}
+};
   // --- LOGOWANIE I REJESTRACJA ---
   const handleLoginChange = (e) => setLoginData({ ...loginData, [e.target.name]: e.target.value });
   const handleLoginSubmit = async () => {
