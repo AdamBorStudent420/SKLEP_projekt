@@ -1,18 +1,22 @@
 import jwt
+import json
 from datetime import datetime, timedelta
 from typing import List, Optional
 
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.conf import settings
-from ninja import NinjaAPI, Schema
+from django.db import transaction
 
-from .models import Towar, Klient, Dostawa, Rabat, Kategoria
+from ninja import NinjaAPI, Schema, Form, File
+from ninja.files import UploadedFile
 from ninja.security import HttpBearer
+
+from .models import Towar, Klient, Dostawa, Rabat, Kategoria, Magazyn, Atrybut, WartoscAtrybutu
 
 
 # ==========================================
-# JWT – używany tylko dla zamówień
+# JWT – używany do weryfikacji tożsamości
 # ==========================================
 
 class JWTAuth(HttpBearer):
@@ -27,19 +31,17 @@ auth = JWTAuth()
 
 
 # ==========================================
-# API BEZ GLOBALNEGO AUTH
+# INICJALIZACJA API
 # ==========================================
 
 api = NinjaAPI(title="Sklep Komputerowy API", version="1.0.0")
 
-
-# Router zamówień — JEDYNY chroniony JWT
 from .orders import router as orders_router
-api.add_router("/zamowienia", orders_router, auth=auth)
+api.add_router("/zamowienia", orders_router)
 
 
 # ==========================================
-# SCHEMATY (bez zmian)
+# SCHEMATY DANYCH
 # ==========================================
 
 class AtrybutSchema(Schema):
@@ -59,6 +61,10 @@ class KategoriaSchema(Schema):
     @staticmethod
     def resolve_image(obj):
         return obj.image.url if obj.image else None
+
+class AtrybutSlownikSchema(Schema):
+    id: int
+    nazwa: str
 
 class ProduktSchema(Schema):
     id: int
@@ -134,7 +140,7 @@ class RabatSchema(Schema):
 
 
 # ==========================================
-# PUBLICZNE ENDPOINTY (bez zmian)
+# PUBLICZNE ENDPOINTY SKLEPU
 # ==========================================
 
 @api.get("/produkty/", response=List[ProduktSchema])
@@ -157,9 +163,29 @@ def get_dostawy(request):
 def get_rabaty(request):
     return Rabat.objects.filter(aktywny=True)
 
+# Inteligente API zwracające atrybuty powiązane z podkategorią
+@api.get("/atrybuty/", response=List[AtrybutSlownikSchema])
+def get_atrybuty(request, kategoria_id: Optional[int] = None, podkategoria_id: Optional[int] = None):
+    qs = Atrybut.objects.all()
+    
+    if podkategoria_id:
+        # Pobierz ID atrybutów, które były używane w towarach należących do tej podkategorii
+        uzyte_id = WartoscAtrybutu.objects.filter(
+            towar__podkategoria_id=podkategoria_id
+        ).values_list('atrybut_id', flat=True).distinct()
+        qs = qs.filter(id__in=uzyte_id)
+    elif kategoria_id:
+        # Alternatywnie szersze filtrowanie po samej głównej kategorii
+        uzyte_id = WartoscAtrybutu.objects.filter(
+            towar__kategoria_id=kategoria_id
+        ).values_list('atrybut_id', flat=True).distinct()
+        qs = qs.filter(id__in=uzyte_id)
+        
+    return qs
+
 
 # ==========================================
-# LOGOWANIE – PUBLICZNE
+# LOGOWANIE I REJESTRACJA
 # ==========================================
 
 @api.post("/login/")
@@ -172,20 +198,15 @@ def login(request, data: LoginSchema):
     payload = {
         'user_id': user.id,
         'username': user.username,
+        'is_staff': user.is_staff,
         'exp': datetime.utcnow() + timedelta(days=1)
     }
     token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
 
-    return {"token": token, "username": user.username}
-
-
-# ==========================================
-# REJESTRACJA – PUBLICZNA
-# ==========================================
+    return {"token": token, "username": user.username, "is_staff": user.is_staff}
 
 @api.post("/register/")
 def register(request, data: RegisterSchema):
-
     if User.objects.filter(username=data.username).exists():
         return api.create_response(request, {"detail": "Użytkownik o takim loginie już istnieje."}, status=400)
 
@@ -216,3 +237,56 @@ def register(request, data: RegisterSchema):
     token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
 
     return {"token": token, "username": user.username}
+
+
+# ==========================================
+# ENDPOINTY DLA PANELU PRACOWNIKA (ADMIN)
+# ==========================================
+
+@api.post("/admin/produkty/", auth=auth)
+def create_admin_produkt(
+    request, 
+    payload: str = Form(...), 
+    zdjecie: UploadedFile = File(None)
+):
+    if not request.auth.get('is_staff'):
+        return api.create_response(request, {"detail": "Brak uprawnień. Zaloguj się jako pracownik."}, status=403)
+    
+    try:
+        data = json.loads(payload)
+    except json.JSONDecodeError:
+        return api.create_response(request, {"detail": "Nieprawidłowy format danych JSON."}, status=400)
+
+    with transaction.atomic():
+        towar = Towar.objects.create(
+            nazwa=data.get('nazwa'),
+            producent=data.get('producent'),
+            opis=data.get('opis'),
+            cena_jednostkowa=data.get('cena_jednostkowa'),
+            cena_promocyjna=data.get('cena_promocyjna') or None,
+            kategoria_id=data.get('kategoria_id') or None,
+            podkategoria_id=data.get('podkategoria_id') or None,
+        )
+        
+        if zdjecie:
+            towar.zdjecie.save(zdjecie.name, zdjecie)
+        
+        Magazyn.objects.create(
+            towar=towar,
+            ilosc_dostepna=data.get('ilosc_dostepna', 0)
+        )
+
+        for attr in data.get('atrybuty', []):
+            nazwa = attr.get('nazwa', '').strip()
+            wartosc = attr.get('wartosc', '').strip()
+            
+            if nazwa and wartosc:
+                # Automatycznie dopina nową nazwę do słownika Atrybutów, jeśli jej nie było
+                atrybut_obj, _ = Atrybut.objects.get_or_create(nazwa=nazwa)
+                WartoscAtrybutu.objects.create(
+                    towar=towar, 
+                    atrybut=atrybut_obj, 
+                    wartosc=wartosc
+                )
+        
+    return {"success": True, "towar_id": towar.id, "message": "Produkt dodany pomyślnie"}
