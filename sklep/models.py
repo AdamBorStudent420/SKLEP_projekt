@@ -188,6 +188,7 @@ class Zamowienie(models.Model):
     pracownik = models.ForeignKey(Pracownik, on_delete=models.SET_NULL, null=True, blank=True)
     rabat = models.ForeignKey(Rabat, on_delete=models.SET_NULL, null=True, blank=True)
     data_zamowienia = models.DateTimeField()
+    metoda_platnosci = models.CharField(max_length=50, default='PRZELEW')
     status = models.CharField(
         max_length=30, 
         choices=StatusZamowienia.choices, 

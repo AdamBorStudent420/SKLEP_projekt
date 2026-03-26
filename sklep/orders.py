@@ -4,6 +4,8 @@ from django.utils import timezone
 from django.db import transaction
 from django.contrib.auth.models import User
 from datetime import datetime
+from ninja.responses import Response
+
 
 # Dodane importy dla autoryzacji JWT:
 import jwt
@@ -155,6 +157,7 @@ def create_order(request, data: ZamowienieSchema):
             pass
 
     # 4. Tworzymy zamówienie
+
     zamowienie = Zamowienie.objects.create(
         klient=klient,
         adres=adres,
@@ -219,3 +222,48 @@ def get_admin_orders(request):
     return Zamowienie.objects.select_related(
         'klient', 'platnosc', 'dostawa', 'rabat'
     ).prefetch_related('pozycje').order_by('-data_zamowienia')
+
+
+
+# ==========================================
+# ENDPOINT DLA ZALOGOWANEGO UŻYTKOWNIKA
+# ==========================================
+
+class UserOrderSchema(Schema):
+    id: int
+    data_utworzenia: datetime
+    status: str
+    suma: float
+    
+
+@router.get("/", auth=auth, response=List[UserOrderSchema])
+def get_user_orders(request):
+    """Pobiera zamówienia zalogowanego użytkownika"""
+    
+    if not request.auth:
+        return 401, {"detail": "Musisz być zalogowany"}
+    
+    user_id = request.auth.get('user_id')
+    
+    try:
+        klient = Klient.objects.get(user_id=user_id)
+    except Klient.DoesNotExist:
+        return 404, {"detail": "Profil klienta nie istnieje"}
+    
+    zamowienia = Zamowienie.objects.filter(klient=klient).order_by('-data_zamowienia')
+    
+    result = []
+    for z in zamowienia:
+        try:
+            kwota = float(z.platnosc.kwota) if hasattr(z, 'platnosc') and z.platnosc else 0
+        except:
+            kwota = 0
+        
+        result.append({
+            "id": z.id,
+            "data_utworzenia": z.data_zamowienia,
+            "status": z.status,
+            "suma": kwota,
+        })
+    
+    return result

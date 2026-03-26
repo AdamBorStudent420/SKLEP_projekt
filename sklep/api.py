@@ -15,6 +15,7 @@ from ninja.security import HttpBearer
 from .models import Towar, Klient, Dostawa, Rabat, Kategoria, Magazyn, Atrybut, WartoscAtrybutu
 
 
+
 # ==========================================
 # JWT – używany do weryfikacji tożsamości
 # ==========================================
@@ -37,7 +38,7 @@ auth = JWTAuth()
 api = NinjaAPI(title="Sklep Komputerowy API", version="1.0.0")
 
 from .orders import router as orders_router
-api.add_router("/zamowienia", orders_router)
+api.add_router("/zamowienia/", orders_router)
 
 
 # ==========================================
@@ -290,3 +291,150 @@ def create_admin_produkt(
                 )
         
     return {"success": True, "towar_id": towar.id, "message": "Produkt dodany pomyślnie"}
+
+
+
+# ==========================================
+# SCHEMAT DLA DANYCH UŻYTKOWNIKA
+# ==========================================
+
+class UserDataSchema(Schema):
+    id: int
+    username: str
+    email: str
+    first_name: str
+    last_name: str
+    imie: str
+    nazwisko: str
+    nr_tel: Optional[str]
+    avatar: Optional[str]
+
+class UpdateUserSchema(Schema):
+    imie: Optional[str] = None
+    nazwisko: Optional[str] = None
+    nr_tel: Optional[str] = None
+    email: Optional[str] = None
+
+# ==========================================
+# ENDPOINT DLA DANYCH UŻYTKOWNIKA (GET)
+# ==========================================
+
+@api.get("/me", auth=auth, response=UserDataSchema)
+def get_current_user(request):
+    """Zwraca dane aktualnie zalogowanego użytkownika"""
+    
+    if not request.auth:
+        return api.create_response(
+            request, 
+            {"detail": "Nie jesteś zalogowany"}, 
+            status=401
+        )
+    
+    user_id = request.auth.get('user_id')
+    
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return api.create_response(
+            request, 
+            {"detail": "Użytkownik nie istnieje"}, 
+            status=404
+        )
+    
+    try:
+        klient = Klient.objects.get(user=user)
+        imie = klient.imie
+        nazwisko = klient.nazwisko
+        nr_tel = klient.nr_tel
+    except Klient.DoesNotExist:
+        imie = user.first_name
+        nazwisko = user.last_name
+        nr_tel = None
+    
+    return {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "imie": imie,
+        "nazwisko": nazwisko,
+        "nr_tel": nr_tel,
+        "avatar": None,
+    }
+
+# ==========================================
+# ENDPOINT DO AKTUALIZACJI DANYCH UŻYTKOWNIKA (PUT)
+# ==========================================
+
+@api.put("/me", auth=auth)
+def update_current_user(request, data: UpdateUserSchema):
+    """Aktualizuje dane aktualnie zalogowanego użytkownika"""
+    
+    if not request.auth:
+        return api.create_response(
+            request, 
+            {"detail": "Nie jesteś zalogowany"}, 
+            status=401
+        )
+    
+    user_id = request.auth.get('user_id')
+    
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return api.create_response(
+            request, 
+            {"detail": "Użytkownik nie istnieje"}, 
+            status=404
+        )
+    
+    try:
+        klient = Klient.objects.get(user=user)
+    except Klient.DoesNotExist:
+        klient = Klient.objects.create(
+            user=user,
+            imie=user.first_name,
+            nazwisko=user.last_name,
+            email=user.email,
+            nr_tel=""
+        )
+    
+    if data.imie is not None:
+        klient.imie = data.imie
+        user.first_name = data.imie
+    
+    if data.nazwisko is not None:
+        klient.nazwisko = data.nazwisko
+        user.last_name = data.nazwisko
+    
+    if data.nr_tel is not None:
+        klient.nr_tel = data.nr_tel
+    
+    if data.email is not None:
+        if User.objects.filter(email=data.email).exclude(id=user.id).exists():
+            return api.create_response(
+                request, 
+                {"detail": "Ten adres e-mail jest już zajęty."}, 
+                status=400
+            )
+        user.email = data.email
+        klient.email = data.email
+    
+    user.save()
+    klient.save()
+    
+    return {
+        "success": True,
+        "message": "Dane zostały zaktualizowane",
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "imie": klient.imie,
+            "nazwisko": klient.nazwisko,
+            "nr_tel": klient.nr_tel,
+        }
+    }
