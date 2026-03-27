@@ -753,6 +753,26 @@ def update_admin_produkt(
         
     return {"success": True, "towar_id": towar.id, "message": "Produkt zaktualizowany pomyślnie"}
 
+@api.delete("/admin/produkty/{towar_id}/", auth=auth)
+def delete_admin_produkt(request, towar_id: int):
+    """Usuwa produkt z bazy danych wraz z powiązanymi danymi (zdjęcia, atrybuty, magazyn)"""
+    if not request.auth.get('is_staff'):
+        return api.create_response(request, {"detail": "Brak uprawnień. Zaloguj się jako pracownik."}, status=403)
+    
+    try:
+        towar = Towar.objects.get(id=towar_id)
+        # Usunięcie Towaru usunie kaskadowo: ZdjecieTowaru, WartoscAtrybutu, Magazyn, Opinie klienta.
+        # UWAGA: Jeśli Towar znajduje się w jakiejkolwiek PozycjaZamowienia (klient to zamówił), 
+        # on_delete=models.PROTECT zablokuje usunięcie i wyrzuci ProtectedError.
+        towar.delete()
+        return {"success": True, "message": "Produkt został usunięty."}
+    except Towar.DoesNotExist:
+        return api.create_response(request, {"detail": "Nie znaleziono produktu."}, status=404)
+    except Exception as e:
+        if 'ProtectedError' in type(e).__name__:
+            return api.create_response(request, {"detail": "Nie można usunąć tego produktu, ponieważ widnieje w historii istniejących zamówień."}, status=400)
+        return api.create_response(request, {"detail": f"Nie można usunąć produktu: {str(e)}"}, status=400)
+
 
 # ==========================================
 # PROFIL UŻYTKOWNIKA (/me)

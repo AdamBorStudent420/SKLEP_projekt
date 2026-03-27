@@ -64,7 +64,7 @@ class ZamowienieSchema(Schema):
     koszyk: List[PozycjaKoszykaSchema]
 
 
-@router.post("/")
+@router.post("/", response={200: dict, 400: dict, 401: dict})
 def create_order(request, data: ZamowienieSchema):
     user = None
     klient = None
@@ -246,7 +246,7 @@ def get_user_orders(request):
 class ZgloszenieReklamacjiSchema(Schema):
     tresc: str
 
-@router.post("/{order_id}/reklamacja", auth=auth)
+@router.post("/{order_id}/reklamacja", auth=auth, response={200: dict, 400: dict, 404: dict})
 def zglos_reklamacje(request, order_id: int, payload: ZgloszenieReklamacjiSchema):
     """Zgłasza nową reklamację dla zrealizowanego zamówienia klienta"""
     try:
@@ -323,7 +323,7 @@ def get_user_complaints(request):
 class NowaWiadomoscKlientaSchema(Schema):
     tresc: str
 
-@router.post("/reklamacje/{reklamacja_id}/wiadomosc", auth=auth)
+@router.post("/reklamacje/{reklamacja_id}/wiadomosc", auth=auth, response={200: dict, 404: dict})
 def odpowiedz_klienta_reklamacja(request, reklamacja_id: int, payload: NowaWiadomoscKlientaSchema):
     """Zapisuje wiadomość od klienta do istniejącej konwersacji w reklamacji"""
     try:
@@ -452,7 +452,7 @@ class AdminOrderSchema(Schema):
         return list(obj.historia_statusow.all().order_by('-data_zmiany'))
 
 
-@router.get("/admin/lista", response=List[AdminOrderSchema], auth=auth)
+@router.get("/admin/lista", response={200: List[AdminOrderSchema], 403: dict}, auth=auth)
 def get_admin_orders(request):
     """Pobiera wszystkie zamówienia do widoku 'Zamówienia' w Panelu Pracownika."""
     if not request.auth.get('is_staff'):
@@ -465,7 +465,35 @@ def get_admin_orders(request):
     ).all().order_by('-data_zamowienia')
 
 
-@router.post("/admin/{order_id}/oznacz-oplacone", auth=auth)
+class UpdateOrderStatusSchema(Schema):
+    status: str
+
+@router.post("/admin/{order_id}/status", auth=auth, response={200: dict, 403: dict, 404: dict})
+def update_order_status(request, order_id: int, payload: UpdateOrderStatusSchema):
+    """Aktualizuje status zamówienia przez pracownika."""
+    if not request.auth.get('is_staff'):
+        return 403, {"detail": "Brak uprawnień."}
+    
+    try:
+        zamowienie = Zamowienie.objects.get(id=order_id)
+        stary_status = zamowienie.status
+        zamowienie.status = payload.status
+        zamowienie.save()
+
+        user = User.objects.filter(username=request.auth.get('username')).first()
+        HistoriaStatusowZamowienia.objects.create(
+            zamowienie=zamowienie,
+            stary_status=stary_status,
+            nowy_status=payload.status,
+            zmienione_przez=user
+        )
+
+        return {"success": True}
+    except Zamowienie.DoesNotExist:
+        return 404, {"detail": "Zamówienie nie istnieje."}
+
+
+@router.post("/admin/{order_id}/oznacz-oplacone", auth=auth, response={200: dict, 403: dict, 404: dict})
 def mark_order_paid(request, order_id: int):
     """Ręcznie zaksięgowuje płatność dla zamówienia (zmienia status płatności oraz zamówienia)."""
     if not request.auth.get('is_staff'):

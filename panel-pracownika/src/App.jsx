@@ -201,6 +201,10 @@ export default function AdminApp() {
   const [newAttrValue, setNewAttrValue] = useState('');
   const [newAttrTargetIndex, setNewAttrTargetIndex] = useState(null);
 
+  // --- DODANO: Stany usuwania produktu ---
+  const [deleteProductDialogOpen, setDeleteProductDialogOpen] = useState(false);
+  const [productToDelete, setProductToDelete] = useState(null);
+
   useEffect(() => {
     const token = localStorage.getItem('admin_token');
     const username = localStorage.getItem('admin_username');
@@ -327,6 +331,7 @@ export default function AdminApp() {
     } catch (err) { setCustomersError(err.message); } finally { setLoadingCustomers(false); }
   };
 
+  // Pobieranie Opinii
   const fetchReviews = async () => {
     setLoadingReviews(true);
     try {
@@ -437,6 +442,7 @@ export default function AdminApp() {
     } catch (e) { alert(e.message); }
   };
 
+  // Zapisywanie Odpowiedzi Sklepu
   const handleSaveReply = async () => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/admin/opinie/${selectedReview.id}/odpowiedz`, {
@@ -453,6 +459,7 @@ export default function AdminApp() {
     }
   };
 
+  // ZAPISYWANIE ODPOWIEDZI NA REKLAMACJĘ (WYSYŁANIE WIADOMOŚCI PRZEZ ADMINA)
   const handleSaveComplaintReply = async () => {
     if (!complaintReplyText.trim()) return;
     try {
@@ -463,7 +470,11 @@ export default function AdminApp() {
       });
       if (!res.ok) throw new Error("Nie udało się zapisać odpowiedzi na reklamację.");
       setSnackbar({ open: true, message: 'Odpowiedź na reklamację wysłana!', severity: 'success' });
+
+      const newMsg = { autor: 'SKLEP', tresc: complaintReplyText, data_wyslania: new Date().toLocaleString('pl-PL') };
+      setSelectedComplaint(prev => ({ ...prev, wiadomosci: [...(prev.wiadomosci || []), newMsg] }));
       setComplaintReplyText('');
+
       fetchComplaints();
     } catch (err) {
       setSnackbar({ open: true, message: err.message, severity: 'error' });
@@ -578,7 +589,22 @@ export default function AdminApp() {
         body: formData
       });
 
-      if (!response.ok) throw new Error("Błąd zapisu.");
+      if (!response.ok) {
+        let errorMessage = "Błąd zapisu.";
+        try {
+          const errorText = await response.text();
+          try {
+            const errorData = JSON.parse(errorText);
+            errorMessage = errorData.detail || JSON.stringify(errorData);
+          } catch (jsonErr) {
+            console.error("Serwer zwrócił błąd HTML (Traceback):", errorText);
+            errorMessage = "Błąd krytyczny serwera (500). Sprawdź terminal Django!";
+          }
+        } catch (e) {
+          console.error("Błąd podczas odczytu odpowiedzi:", e);
+        }
+        throw new Error(errorMessage);
+      }
 
       setSnackbar({
         open: true,
@@ -588,6 +614,34 @@ export default function AdminApp() {
       setActiveView('PRODUCTS');
     } catch (err) {
       setSnackbar({ open: true, message: `Błąd: ${err.message}`, severity: 'error' });
+      console.error("Pełny błąd zapisu:", err);
+    }
+  };
+
+  // --- DODANO: Funkcje usuwania produktu ---
+  const handleDeleteProductClick = (e, product) => {
+    e.stopPropagation(); // Zapobiega otwarciu okna edycji
+    setProductToDelete(product);
+    setDeleteProductDialogOpen(true);
+  };
+
+  const confirmDeleteProduct = async () => {
+    if (!productToDelete) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/admin/produkty/${productToDelete.id}/`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${user.token}` }
+      });
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.detail || "Błąd podczas usuwania produktu.");
+      }
+      setSnackbar({ open: true, message: `Produkt "${productToDelete.nazwa}" został usunięty.`, severity: 'success' });
+      setDeleteProductDialogOpen(false);
+      setProductToDelete(null);
+      fetchProducts(); // Zaktualizowanie listy towarów
+    } catch (err) {
+      setSnackbar({ open: true, message: err.message, severity: 'error' });
     }
   };
 
@@ -984,8 +1038,11 @@ export default function AdminApp() {
               <Table>
                 <TableHead sx={{ bgcolor: 'rgba(255,255,255,0.05)' }}>
                   <TableRow>
-                    <TableCell>ID</TableCell><TableCell>Zdjęcie</TableCell><TableCell>Nazwa i Producent</TableCell>
-                    <TableCell align="right">Cena (zł)</TableCell><TableCell align="center">Stan</TableCell>
+                    <TableCell>ID</TableCell>
+                    <TableCell>Zdjęcie</TableCell>
+                    <TableCell>Nazwa i Producent</TableCell>
+                    <TableCell align="right">Cena (zł)</TableCell>
+                    <TableCell align="center">Stan i Akcje</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -1004,7 +1061,14 @@ export default function AdminApp() {
                         </TableCell>
                         <TableCell fontWeight="bold">{p.nazwa}</TableCell>
                         <TableCell align="right">{p.cena_promocyjna ? p.cena_promocyjna.toFixed(2) : p.cena_jednostkowa.toFixed(2)}</TableCell>
-                        <TableCell align="center"><Chip label={`${p.ilosc_dostepna} szt.`} color={p.ilosc_dostepna > 5 ? "success" : "warning"} size="small" /></TableCell>
+                        <TableCell align="center">
+                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
+                            <Chip label={`${p.ilosc_dostepna} szt.`} color={p.ilosc_dostepna > 5 ? "success" : "warning"} size="small" />
+                            <IconButton size="small" color="error" onClick={(e) => handleDeleteProductClick(e, p)} title="Usuń produkt">
+                              <Trash2 size={18} />
+                            </IconButton>
+                          </Box>
+                        </TableCell>
                       </TableRow>
                     ))
                   )}
@@ -1013,6 +1077,24 @@ export default function AdminApp() {
             )}
           </TableContainer>
         )}
+
+        {/* --- MODAL USUWANIA PRODUKTU --- */}
+        <Dialog open={deleteProductDialogOpen} onClose={() => setDeleteProductDialogOpen(false)}>
+          <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#ef4444' }}>
+            <AlertTriangle size={24} /> Potwierdzenie usunięcia
+          </DialogTitle>
+          <DialogContent>
+            <Typography>Czy na pewno chcesz bezpowrotnie usunąć produkt <strong>{productToDelete?.nazwa}</strong>?</Typography>
+            <Typography variant="body2" color="error" sx={{ mt: 2 }}>
+              Uwaga: Ta operacja usunie również wszystkie stany magazynowe, dodatkowe zdjęcia i przypisane atrybuty dla tego towaru. Operacji nie można cofnąć!
+            </Typography>
+          </DialogContent>
+          <DialogActions sx={{ p: 2, pt: 0 }}>
+            <Button onClick={() => setDeleteProductDialogOpen(false)} color="inherit">Anuluj</Button>
+            <Button onClick={confirmDeleteProduct} variant="contained" color="error">Usuń produkt</Button>
+          </DialogActions>
+        </Dialog>
+
       </Box>
     );
   };
@@ -1534,7 +1616,7 @@ export default function AdminApp() {
   const drawer = (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <Toolbar sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
-        <Typography variant="h6" fontWeight="550" color="primary.light" sx={{ letterSpacing: 0.5, fontSize: '1.25rem', whiteSpace: 'nowrap' }}>PANEL <span style={{ color: '#fff' }}>PRACOWNIKA</span></Typography>
+        <Typography variant="h6" fontWeight="900" color="primary.light" sx={{ letterSpacing: 0.5, fontSize: '1.25rem', whiteSpace: 'nowrap' }}>TECH<span style={{ color: '#fff' }}>BACKOFFICE</span></Typography>
       </Toolbar>
       <Divider sx={{ borderColor: '#334155' }} />
       <List sx={{ px: 2, pt: 2, flexGrow: 1 }}>

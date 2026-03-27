@@ -129,6 +129,7 @@ export default function App() {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
   const [orderSuccess, setOrderSuccess] = useState(false);
+  const [cartError, setCartError] = useState(''); // <-- DODANO: Stan do wyświetlania błędu braku na magazynie
 
   const [checkoutData, setCheckoutData] = useState({
     imie: '', nazwisko: '',
@@ -350,12 +351,23 @@ export default function App() {
     }
   };
 
+  // --- POPRAWIONE FUNKCJE KOSZYKA (BLOKOWANIE PRZEKROCZENIA STANU) ---
   const handleAddToCart = (product) => {
     setCart((prevCart) => {
       const existingItem = prevCart.find(item => item.id === product.id);
       if (existingItem) {
+        if (existingItem.quantity >= product.ilosc_dostepna) {
+          setCartError(`Przepraszamy, mamy tylko ${product.ilosc_dostepna} szt. produktu "${product.nazwa}" w magazynie.`);
+          return prevCart;
+        }
         return prevCart.map(item => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item);
       }
+
+      if (product.ilosc_dostepna < 1) {
+        setCartError(`Przepraszamy, produkt "${product.nazwa}" jest obecnie wyprzedany.`);
+        return prevCart;
+      }
+
       return [...prevCart, { ...product, quantity: 1 }];
     });
   };
@@ -364,7 +376,11 @@ export default function App() {
     setCart(prevCart => prevCart.map(item => {
       if (item.id === productId) {
         const newQuantity = item.quantity + delta;
-        if (newQuantity >= 1 && newQuantity <= item.ilosc_dostepna) {
+        if (newQuantity > item.ilosc_dostepna) {
+          setCartError(`Maksymalna dostępna ilość to ${item.ilosc_dostepna} szt.`);
+          return item; // Zwróć niezmieniony koszyk
+        }
+        if (newQuantity >= 1) {
           return { ...item, quantity: newQuantity };
         }
       }
@@ -420,8 +436,9 @@ export default function App() {
         return;
       }
       const wymagaAdresu = selectedDelivery && !isOdbior;
-      if (wymagaAdresu && (!checkoutData.ulica || !checkoutData.miasto || !checkoutData.kod_pocztowy)) {
-        alert("Proszę uzupełnić adres dostawy.");
+      // Usunięto sprawdzanie checkoutData.ulica
+      if (wymagaAdresu && (!checkoutData.miasto || !checkoutData.kod_pocztowy)) {
+        alert("Proszę uzupełnić wymagane pola adresu dostawy (Miasto i Kod pocztowy).");
         return;
       }
     }
@@ -472,7 +489,8 @@ export default function App() {
       if (!response.ok) {
         const err = await response.json();
         console.error("Błąd zamówienia:", err);
-        alert("Nie udało się złożyć zamówienia.");
+        // ZMIANA: Wyświetlamy klientowi dokładny powód np. gdy w międzyczasie ktoś mu wykupił produkt
+        alert(err.detail || "Nie udało się złożyć zamówienia.");
         return;
       }
 
@@ -1536,6 +1554,13 @@ export default function App() {
       <Snackbar open={orderSuccess} autoHideDuration={6000} onClose={() => setOrderSuccess(false)} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
         <Alert onClose={() => setOrderSuccess(false)} severity="success" sx={{ width: '100%', fontSize: '1.1rem' }} icon={<CheckCircle />}>
           Zamówienie w drodze do realizacji! Dziękujemy za zaufanie.
+        </Alert>
+      </Snackbar>
+
+      {/* --- DODANY SNACKBAR Z OSTRZEŻENIEM O MAGAZYNIE --- */}
+      <Snackbar open={!!cartError} autoHideDuration={4000} onClose={() => setCartError('')} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
+        <Alert onClose={() => setCartError('')} severity="warning" sx={{ width: '100%', fontSize: '1.1rem' }} icon={<AlertTriangle />}>
+          {cartError}
         </Alert>
       </Snackbar>
 
