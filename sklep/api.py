@@ -7,15 +7,20 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Prefetch
+from django.utils import timezone
+
+from .orders import router as orders_router
 
 from ninja import NinjaAPI, Schema, Form, File
 from ninja.files import UploadedFile
 from ninja.security import HttpBearer
 
-from .models import Towar, Klient, Dostawa, Rabat, Kategoria, Magazyn, Atrybut, WartoscAtrybutu, HistoriaStatusowZamowienia, Zamowienie
-
-
+from .models import (
+    Towar, Klient, Dostawa, Rabat, Kategoria, Podkategoria, 
+    Magazyn, Atrybut, WartoscAtrybutu, HistoriaStatusowZamowienia, 
+    Zamowienie, ZdjecieTowaru, Opinia, PozycjaZamowienia, MetodaPlatnosci,
+    Reklamacja, WiadomoscReklamacji, StatusReklamacji
+)
 
 # ==========================================
 # JWT – używany do weryfikacji tożsamości
@@ -37,13 +42,11 @@ auth = JWTAuth()
 # ==========================================
 
 api = NinjaAPI(title="Sklep Komputerowy API", version="1.0.0")
-
-# Podłączamy Twój router zamówień klienta (bez auth=auth, żeby goście mogli kupować!)
-from .orders import router as orders_router
 api.add_router("/zamowienia/", orders_router)
 
+
 # ==========================================
-# SCHEMATY DANYCH
+# SCHEMATY DANYCH (Katalog i Podstawy)
 # ==========================================
 
 class AtrybutSchema(Schema):
@@ -68,6 +71,14 @@ class AtrybutSlownikSchema(Schema):
     id: int
     nazwa: str
 
+class ZdjecieTowaruSchema(Schema):
+    id: int
+    url: str
+
+    @staticmethod
+    def resolve_url(obj):
+        return obj.zdjecie.url if obj.zdjecie else ""
+
 class ProduktSchema(Schema):
     id: int
     nazwa: str
@@ -79,6 +90,7 @@ class ProduktSchema(Schema):
     cena_jednostkowa: float
     cena_promocyjna: Optional[float]
     zdjecie: Optional[str]
+    dodatkowe_zdjecia: List[ZdjecieTowaruSchema] = []
     ilosc_dostepna: int
     atrybuty: List[AtrybutSchema]
 
@@ -97,6 +109,10 @@ class ProduktSchema(Schema):
     @staticmethod
     def resolve_zdjecie(obj):
         return obj.zdjecie.url if obj.zdjecie else None
+        
+    @staticmethod
+    def resolve_dodatkowe_zdjecia(obj):
+        return list(obj.dodatkowe_zdjecia.all())
 
     @staticmethod
     def resolve_ilosc_dostepna(obj):
@@ -111,18 +127,6 @@ class ProduktSchema(Schema):
             {"nazwa": wa.atrybut.nazwa, "wartosc": wa.wartosc}
             for wa in obj.wartosci_atrybutow.all()
         ]
-
-class LoginSchema(Schema):
-    username: str
-    password: str
-
-class RegisterSchema(Schema):
-    username: str
-    password: str
-    email: str
-    imie: str
-    nazwisko: str
-    nr_tel: str
 
 class DostawaSchema(Schema):
     id: int
@@ -143,117 +147,310 @@ class RabatSchema(Schema):
     procent: float
     aktywny: bool
 
-class PozycjaZamowieniaSchema(Schema):
-    nazwa: str
-    ilosc: int
-    cena_sprzedazy: float
-    suma: float
-
-    @staticmethod
-    def resolve_nazwa(obj):
-        return obj.towar.nazwa
-    @staticmethod
-    def resolve_suma(obj):
-        return float(obj.ilosc) * float(obj.cena_sprzedazy)
-
-class HistoriaStatusowSchema(Schema):
-    nowy_status: str
-    data_zmiany: datetime
-    zmienione_przez: str
-
-    @staticmethod
-    def resolve_zmienione_przez(obj):
-        return obj.zmienione_przez.username if obj.zmienione_przez else "System"
-
-# Rozbuduj stary AdminOrderSchema
-class AdminOrderSchema(Schema):
+class MetodaPlatnosciSchema(Schema):
     id: int
-    klient_dane: str
-    adres_dostawy: str = None
-    dostawa_nazwa: str = None
-    rabat_info: str = None
-    status_platnosci: str = None
-    data_zamowienia: datetime
-    status: str
-    kwota: float
+    nazwa: str
+
+
+# ==========================================
+# OPINIE PRODUKTÓW I WERYFIKACJA ZAKUPU
+# ==========================================
+
+class OpiniaSklepSchema(Schema):
+    id: int
+    imie_klienta: str
+    ocena: int
+    tresc: str
+    data_wystawienia: str
+    odpowiedz_pracownika: Optional[str] = None
+    data_odpowiedzi: str
+
+    @staticmethod
+    def resolve_imie_klienta(obj):
+        try:
+            return obj.klient.imie if obj.klient.imie else "Użytkownik"
+        except Exception:
+            return "Użytkownik"
+
+    @staticmethod
+    def resolve_data_wystawienia(obj):
+        try:
+            return obj.data_wystawienia.strftime("%Y-%m-%d") if obj.data_wystawienia else ""
+        except Exception:
+            return ""
+
+    @staticmethod
+    def resolve_data_odpowiedzi(obj):
+        try:
+            return obj.data_odpowiedzi.strftime("%Y-%m-%d") if obj.data_odpowiedzi else ""
+        except Exception:
+            return ""
+
+class NowaOpiniaSchema(Schema):
+    ocena: int
+    tresc: str
+
+@api.get("/produkty/{towar_id}/opinie", response=List[OpiniaSklepSchema])
+def get_opinie_produktu(request, towar_id: int):
+    """Pobiera wszystkie opinie dla danego produktu na stronie sklepu"""
+    return Opinia.objects.filter(towar_id=towar_id).order_by('-data_wystawienia')
+
+@api.get("/produkty/{towar_id}/czy-moze-ocenic", auth=auth)
+def czy_moze_ocenic(request, towar_id: int):
+    """Weryfikuje, czy aktualny klient kupił ten towar i czy już go ocenił"""
+    try:
+        user = User.objects.get(username=request.auth['username'])
+        klient = Klient.objects.filter(user=user).first()
+        
+        if not klient:
+            return {"can_review": False, "kupil": False, "juz_ocenil": False}
+
+        kupil = PozycjaZamowienia.objects.filter(
+            zamowienie__klient=klient,
+            towar_id=towar_id,
+            zamowienie__status__in=['W_REALIZACJI', 'WYSLANE', 'DOSTARCZONE', 'OPLACONE']
+        ).exists()
+
+        juz_ocenil = Opinia.objects.filter(klient=klient, towar_id=towar_id).exists()
+
+        return {
+            "can_review": kupil and not juz_ocenil,
+            "kupil": kupil,
+            "juz_ocenil": juz_ocenil
+        }
+    except Exception:
+        return {"can_review": False, "kupil": False, "juz_ocenil": False}
+
+@api.post("/produkty/{towar_id}/opinie", auth=auth)
+def dodaj_opinie(request, towar_id: int, payload: NowaOpiniaSchema):
+    """Dodaje opinię po sprawdzeniu czy klient kupił towar"""
+    user = User.objects.get(username=request.auth['username'])
+    klient = Klient.objects.filter(user=user).first()
     
-    # --- NOWE POLA ---
-    telefon: str = None
-    metoda_platnosci: str = None
-    uwagi_wewnetrzne: str = None
-    pozycje: List[PozycjaZamowieniaSchema] = None
-    historia: List[HistoriaStatusowSchema] = None
+    if not klient:
+        return api.create_response(request, {"detail": "Musisz mieć uzupełniony profil klienta."}, status=400)
+
+    kupil = PozycjaZamowienia.objects.filter(
+        zamowienie__klient=klient,
+        towar_id=towar_id,
+        zamowienie__status__in=['W_REALIZACJI', 'WYSLANE', 'DOSTARCZONE', 'OPLACONE']
+    ).exists()
+
+    if not kupil:
+        return api.create_response(request, {"detail": "Możesz ocenić tylko produkty, które fizycznie zamówiłeś w naszym sklepie."}, status=403)
+
+    if Opinia.objects.filter(klient=klient, towar_id=towar_id).exists():
+        return api.create_response(request, {"detail": "Dodałeś już opinię do tego produktu wcześniej."}, status=400)
+
+    Opinia.objects.create(
+        klient=klient,
+        towar_id=towar_id,
+        ocena=payload.ocena,
+        tresc=payload.tresc,
+        data_wystawienia=timezone.now()
+    )
+    return {"success": True}
+
+class AdminOpiniaSchema(Schema):
+    id: int
+    tresc_skrocona: str
+    pelna_tresc: str
+    towar_nazwa: str
+    towar_zdjecie: str
+    klient_dane: str
+    ocena: int
+    data_wystawienia: str
+    odpowiedz_pracownika: Optional[str] = None
+
+    @staticmethod
+    def resolve_tresc_skrocona(obj):
+        try:
+            words = obj.tresc.split()
+            if len(words) > 10:
+                return " ".join(words[:10]) + "..."
+            return obj.tresc
+        except Exception:
+            return ""
+
+    @staticmethod
+    def resolve_pelna_tresc(obj):
+        return obj.tresc or ""
+
+    @staticmethod
+    def resolve_towar_nazwa(obj):
+        try:
+            return obj.towar.nazwa
+        except Exception:
+            return "Usunięty produkt"
+
+    @staticmethod
+    def resolve_towar_zdjecie(obj):
+        try:
+            return obj.towar.zdjecie.url if obj.towar.zdjecie else ""
+        except Exception:
+            return ""
 
     @staticmethod
     def resolve_klient_dane(obj):
-        return f"{obj.klient.imie} {obj.klient.nazwisko} ({obj.klient.email})"
-
-    @staticmethod
-    def resolve_adres_dostawy(obj):
-        if hasattr(obj, 'adres') and obj.adres:
-            mieszkanie = f"/{obj.adres.nr_mieszkania}" if obj.adres.nr_mieszkania else ""
-            return f"{obj.adres.ulica} {obj.adres.nr_domu}{mieszkanie}, {obj.adres.kod_pocztowy} {obj.adres.miasto}"
-        return "Brak adresu"
-
-    @staticmethod
-    def resolve_dostawa_nazwa(obj):
-        if hasattr(obj, 'dostawa') and obj.dostawa:
-            return f"{obj.dostawa.rodzaj.nazwa} ({obj.dostawa.cena_dostawy} zł)"
-        return "Brak danych"
-
-    @staticmethod
-    def resolve_rabat_info(obj):
-        if hasattr(obj, 'rabat') and obj.rabat:
-            return f"{obj.rabat.nazwa} (-{obj.rabat.procent}%)"
-        return "Brak"
-
-    @staticmethod
-    def resolve_status_platnosci(obj):
         try:
-            return obj.platnosc.status.nazwa
+            return f"{obj.klient.imie} {obj.klient.nazwisko} ({obj.klient.email})"
         except Exception:
-            return "Brak płatności"
+            return "Nieznany Klient"
 
     @staticmethod
-    def resolve_kwota(obj):
+    def resolve_data_wystawienia(obj):
         try:
-            return float(obj.platnosc.kwota)
+            return obj.data_wystawienia.strftime("%Y-%m-%d %H:%M") if obj.data_wystawienia else ""
         except Exception:
-            suma = sum(float(p.cena_sprzedazy) * p.ilosc for p in obj.pozycje.all())
-            if hasattr(obj, 'dostawa') and obj.dostawa:
-                suma += float(obj.dostawa.cena_dostawy)
-            if hasattr(obj, 'rabat') and obj.rabat:
-                suma = suma * (1 - (float(obj.rabat.procent) / 100))
-            return round(suma, 2)
+            return ""
 
-    # --- BEZPIECZNE RESOLVERY DLA NOWYCH PÓL ---
-    @staticmethod
-    def resolve_telefon(obj):
-        try:
-            return obj.klient.nr_tel
-        except Exception:
-            return "Brak telefonu"
+@api.get("/admin/opinie", response=List[AdminOpiniaSchema], auth=auth)
+def get_admin_opinie(request):
+    """Zwraca wszystkie opinie do panelu pracownika"""
+    if not request.auth.get('is_staff'):
+        return api.create_response(request, {"detail": "Brak uprawnień."}, status=403)
+    
+    return Opinia.objects.select_related('towar', 'klient').all().order_by('-data_wystawienia')
+
+class OdpowiedzOpiniaSchema(Schema):
+    odpowiedz: str
+
+@api.post("/admin/opinie/{opinia_id}/odpowiedz", auth=auth)
+def odpowiedz_na_opinie(request, opinia_id: int, payload: OdpowiedzOpiniaSchema):
+    """Zapisuje odpowiedź pracownika do opinii klienta"""
+    if not request.auth.get('is_staff'):
+        return api.create_response(request, {"detail": "Brak uprawnień."}, status=403)
+    
+    try:
+        opinia = Opinia.objects.get(id=opinia_id)
+        opinia.odpowiedz_pracownika = payload.odpowiedz
+        opinia.data_odpowiedzi = timezone.now()
+        opinia.save()
+        return {"success": True}
+    except Opinia.DoesNotExist:
+        return api.create_response(request, {"detail": "Opinia nie istnieje."}, status=404)
+
+
+# ==========================================
+# REKLAMACJE (WIDOKI ADMINA - CZAT I STATUSY)
+# ==========================================
+
+# --- ZARZĄDZANIE STATUSEM REKLAMACJI ---
+class StatusReklamacjiSchema(Schema):
+    id: int
+    nazwa: str
+
+@api.get("/admin/reklamacje/statusy", response=List[StatusReklamacjiSchema], auth=auth)
+def get_statusy_reklamacji(request):
+    if not request.auth.get('is_staff'):
+        return api.create_response(request, {"detail": "Brak uprawnień."}, status=403)
+    return StatusReklamacji.objects.all()
+
+class UpdateReklamacjaStatusSchema(Schema):
+    status_id: int
+
+@api.put("/admin/reklamacje/{reklamacja_id}/status", auth=auth)
+def update_reklamacja_status(request, reklamacja_id: int, payload: UpdateReklamacjaStatusSchema):
+    if not request.auth.get('is_staff'):
+        return api.create_response(request, {"detail": "Brak uprawnień."}, status=403)
+    
+    reklamacja = Reklamacja.objects.get(id=reklamacja_id)
+    status_obj = StatusReklamacji.objects.get(id=payload.status_id)
+    reklamacja.status = status_obj
+    reklamacja.save()
+    return {"success": True, "nowy_status": status_obj.nazwa}
+
+
+# --- POBIERANIE CZATU REKLAMACJI ---
+class WiadomoscSchema(Schema):
+    autor: str
+    tresc: str
+    data_wyslania: str
 
     @staticmethod
-    def resolve_metoda_platnosci(obj):
+    def resolve_data_wyslania(obj):
+        return obj.data_wyslania.strftime("%Y-%m-%d %H:%M")
+
+class AdminReklamacjaSchema(Schema):
+    id: int
+    zamowienie_id: int
+    klient_dane: str
+    tresc_skrocona: str
+    pelna_tresc: str
+    data_zgloszenia: str
+    wiadomosci: List[WiadomoscSchema]
+    status: str = None
+    status_id: int = None
+    
+    @staticmethod
+    def resolve_zamowienie_id(obj):
+        return obj.pozycja.zamowienie.id
+        
+    @staticmethod
+    def resolve_klient_dane(obj):
         try:
-            return obj.platnosc.metoda
+            k = obj.pozycja.zamowienie.klient
+            return f"{k.imie} {k.nazwisko} ({k.email})"
         except Exception:
-            return "Brak (nieopłacone)"
+            return "Nieznany klient"
 
     @staticmethod
-    def resolve_pozycje(obj):
+    def resolve_tresc_skrocona(obj):
         try:
-            return list(obj.pozycje.all())
+            words = obj.opis.split()
+            return " ".join(words[:10]) + "..." if len(words) > 10 else obj.opis
         except Exception:
-            return []
+            return ""
 
     @staticmethod
-    def resolve_historia(obj):
+    def resolve_pelna_tresc(obj):
+        return obj.opis or ""
+
+    @staticmethod
+    def resolve_data_zgloszenia(obj):
         try:
-            return list(obj.historia_statusow.all())
+            return obj.data_zgloszenia.strftime("%Y-%m-%d %H:%M") if obj.data_zgloszenia else ""
         except Exception:
-            return []
+            return ""
+
+    @staticmethod
+    def resolve_wiadomosci(obj):
+        return list(obj.wiadomosci.all().order_by('data_wyslania'))
+        
+    @staticmethod
+    def resolve_status(obj):
+        return obj.status.nazwa if hasattr(obj, 'status') and obj.status else "Brak"
+
+    @staticmethod
+    def resolve_status_id(obj):
+        return obj.status.id if hasattr(obj, 'status') and obj.status else None
+
+@api.get("/admin/reklamacje", response=List[AdminReklamacjaSchema], auth=auth)
+def get_admin_reklamacje(request):
+    if not request.auth.get('is_staff'):
+        return api.create_response(request, {"detail": "Brak uprawnień."}, status=403)
+    
+    return Reklamacja.objects.select_related(
+        'pozycja__zamowienie__klient', 'status'
+    ).prefetch_related('wiadomosci').all().order_by('-data_zgloszenia')
+
+class OdpowiedzReklamacjaSchema(Schema):
+    odpowiedz: str
+
+@api.post("/admin/reklamacje/{reklamacja_id}/odpowiedz", auth=auth)
+def odpowiedz_na_reklamacje(request, reklamacja_id: int, payload: OdpowiedzReklamacjaSchema):
+    """Zapisuje odpowiedź pracownika jako kolejną wiadomość w czacie reklamacyjnym"""
+    if not request.auth.get('is_staff'):
+        return api.create_response(request, {"detail": "Brak uprawnień."}, status=403)
+    
+    reklamacja = Reklamacja.objects.get(id=reklamacja_id)
+    
+    WiadomoscReklamacji.objects.create(
+        reklamacja=reklamacja,
+        tresc=payload.odpowiedz,
+        autor='SKLEP' # Oznaczamy, że wysłał pracownik
+    )
+    return {"success": True}
 
 
 # ==========================================
@@ -265,7 +462,7 @@ def get_produkty(request):
     return Towar.objects.select_related(
         'kategoria', 'podkategoria', 'magazyn'
     ).prefetch_related(
-        'wartosci_atrybutow__atrybut'
+        'wartosci_atrybutow__atrybut', 'dodatkowe_zdjecia'
     ).all()
 
 @api.get("/kategorie/", response=List[KategoriaSchema])
@@ -280,19 +477,20 @@ def get_dostawy(request):
 def get_rabaty(request):
     return Rabat.objects.filter(aktywny=True)
 
-# Inteligente API zwracające atrybuty powiązane z podkategorią
+@api.get("/metody-platnosci/", response=List[MetodaPlatnosciSchema])
+def get_metody_platnosci(request):
+    return MetodaPlatnosci.objects.filter(aktywna=True)
+
 @api.get("/atrybuty/", response=List[AtrybutSlownikSchema])
 def get_atrybuty(request, kategoria_id: Optional[int] = None, podkategoria_id: Optional[int] = None):
     qs = Atrybut.objects.all()
     
     if podkategoria_id:
-        # Pobierz ID atrybutów, które były używane w towarach należących do tej podkategorii
         uzyte_id = WartoscAtrybutu.objects.filter(
             towar__podkategoria_id=podkategoria_id
         ).values_list('atrybut_id', flat=True).distinct()
         qs = qs.filter(id__in=uzyte_id)
     elif kategoria_id:
-        # Alternatywnie szersze filtrowanie po samej głównej kategorii
         uzyte_id = WartoscAtrybutu.objects.filter(
             towar__kategoria_id=kategoria_id
         ).values_list('atrybut_id', flat=True).distinct()
@@ -300,10 +498,70 @@ def get_atrybuty(request, kategoria_id: Optional[int] = None, podkategoria_id: O
         
     return qs
 
+class AdminCustomerOrderSchema(Schema):
+    id: int
+    data_zamowienia: str
+    status: str
+    kwota: float
+    @staticmethod
+    def resolve_data_zamowienia(obj): return obj.data_zamowienia.strftime("%Y-%m-%d %H:%M")
+    @staticmethod
+    def resolve_status(obj): return obj.get_status_display()
+    @staticmethod
+    def resolve_kwota(obj):
+        try: return float(obj.platnosc.kwota)
+        except: return 0.0
+
+class AdminCustomerSchema(Schema):
+    id: int
+    imie: str
+    nazwisko: str
+    email: str
+    telefon: str
+    typ: str
+    liczba_zamowien: int
+    laczna_kwota: float
+    zamowienia: List[AdminCustomerOrderSchema]
+
+    @staticmethod
+    def resolve_telefon(obj): return obj.nr_tel
+    @staticmethod
+    def resolve_typ(obj): return "Zarejestrowany" if obj.user else "Gość"
+    @staticmethod
+    def resolve_liczba_zamowien(obj): return obj.zamowienie_set.count()
+    @staticmethod
+    def resolve_laczna_kwota(obj):
+        total = 0
+        for z in obj.zamowienie_set.all():
+            try: total += float(z.platnosc.kwota)
+            except: pass
+        return round(total, 2)
+    @staticmethod
+    def resolve_zamowienia(obj): return list(obj.zamowienie_set.all().order_by('-data_zamowienia'))
+
+@api.get("/admin/klienci", response=List[AdminCustomerSchema], auth=auth)
+def get_admin_customers(request):
+    """Pobiera bazę klientów dla panelu pracownika"""
+    if not request.auth.get('is_staff'):
+        return api.create_response(request, {"detail": "Brak uprawnień."}, status=403)
+    return Klient.objects.prefetch_related('zamowienie_set__platnosc').all()
+
 
 # ==========================================
 # LOGOWANIE I REJESTRACJA
 # ==========================================
+
+class LoginSchema(Schema):
+    username: str
+    password: str
+
+class RegisterSchema(Schema):
+    username: str
+    password: str
+    email: str
+    imie: str
+    nazwisko: str
+    nr_tel: str
 
 @api.post("/login/")
 def login(request, data: LoginSchema):
@@ -387,7 +645,11 @@ def create_admin_produkt(
         
         if zdjecie:
             towar.zdjecie.save(zdjecie.name, zdjecie)
-        
+            
+        dodatkowe_pliki = request.FILES.getlist('dodatkowe_zdjecia')
+        for plik in dodatkowe_pliki:
+            ZdjecieTowaru.objects.create(towar=towar, zdjecie=plik)
+            
         Magazyn.objects.create(
             towar=towar,
             ilosc_dostepna=data.get('ilosc_dostepna', 0)
@@ -398,7 +660,6 @@ def create_admin_produkt(
             wartosc = attr.get('wartosc', '').strip()
             
             if nazwa and wartosc:
-                # Automatycznie dopina nową nazwę do słownika Atrybutów, jeśli jej nie było
                 atrybut_obj, _ = Atrybut.objects.get_or_create(nazwa=nazwa)
                 WartoscAtrybutu.objects.create(
                     towar=towar, 
@@ -408,9 +669,28 @@ def create_admin_produkt(
         
     return {"success": True, "towar_id": towar.id, "message": "Produkt dodany pomyślnie"}
 
-# ==========================================
-# NOWY ENDPOINT: EDYCJA ISTNIEJĄCEGO TOWARU
-# ==========================================
+
+class NowyAtrybutSchema(Schema):
+    nazwa: str
+    podkategoria_id: int
+
+@api.post("/admin/atrybuty", auth=auth)
+def dodaj_atrybut(request, payload: NowyAtrybutSchema):
+    if not request.auth.get('is_staff'):
+        return api.create_response(request, {"detail": "Brak uprawnień."}, status=403)
+    
+    podkategoria = Podkategoria.objects.get(id=payload.podkategoria_id)
+    
+    try:
+        atrybut, created = Atrybut.objects.get_or_create(nazwa=payload.nazwa, podkategoria=podkategoria)
+    except Exception:
+        atrybut, created = Atrybut.objects.get_or_create(nazwa=payload.nazwa)
+        if hasattr(atrybut, 'podkategorie'):
+            atrybut.podkategorie.add(podkategoria)
+    
+    return {"id": atrybut.id, "nazwa": atrybut.nazwa, "wartosci": []}
+
+
 @api.post("/admin/produkty/{towar_id}/", auth=auth)
 def update_admin_produkt(
     request, 
@@ -432,7 +712,6 @@ def update_admin_produkt(
         return api.create_response(request, {"detail": "Nie znaleziono produktu."}, status=404)
 
     with transaction.atomic():
-        # 1. Aktualizacja podstawowych danych produktu
         towar.nazwa = data.get('nazwa', towar.nazwa)
         towar.producent = data.get('producent', towar.producent)
         towar.opis = data.get('opis', towar.opis)
@@ -441,18 +720,24 @@ def update_admin_produkt(
         towar.kategoria_id = data.get('kategoria_id') or None
         towar.podkategoria_id = data.get('podkategoria_id') or None
         
-        # Jeśli przesłano nowe zdjęcie, nadpisujemy stare
         if zdjecie:
             towar.zdjecie.save(zdjecie.name, zdjecie)
             
         towar.save()
-        
-        # 2. Aktualizacja magazynu
+
+        usuniete_ids_json = request.POST.get('usuniete_zdjecia')
+        if usuniete_ids_json:
+            usuniete_ids = json.loads(usuniete_ids_json)
+            ZdjecieTowaru.objects.filter(id__in=usuniete_ids, towar=towar).delete()
+
+        dodatkowe_pliki = request.FILES.getlist('dodatkowe_zdjecia')
+        for plik in dodatkowe_pliki:
+            ZdjecieTowaru.objects.create(towar=towar, zdjecie=plik)
+
         magazyn, _ = Magazyn.objects.get_or_create(towar=towar, defaults={'ilosc_dostepna': 0})
         magazyn.ilosc_dostepna = data.get('ilosc_dostepna', magazyn.ilosc_dostepna)
         magazyn.save()
 
-        # 3. Aktualizacja atrybutów (najprostsza metoda: usuwamy stare i wstawiamy nowe)
         towar.wartosci_atrybutow.all().delete()
         for attr in data.get('atrybuty', []):
             nazwa = attr.get('nazwa', '').strip()
@@ -468,125 +753,60 @@ def update_admin_produkt(
         
     return {"success": True, "towar_id": towar.id, "message": "Produkt zaktualizowany pomyślnie"}
 
-class NotatkiSchema(Schema):
-    uwagi: str
-
-class ZmianaStatusuSchema(Schema):
-    status: str
-
-@api.post("/zamowienia/admin/{order_id}/uwagi", auth=auth)
-def update_uwagi(request, order_id: int, payload: NotatkiSchema):
-    if not request.auth.get('is_staff'): return 403, "Brak dostępu"
-    zamowienie = Zamowienie.objects.get(id=order_id)
-    zamowienie.uwagi_wewnetrzne = payload.uwagi
-    zamowienie.save()
-    return {"success": True}
-
-@api.post("/zamowienia/admin/{order_id}/status", auth=auth)
-def update_status(request, order_id: int, payload: ZmianaStatusuSchema):
-    if not request.auth.get('is_staff'): return 403, "Brak dostępu"
-    zamowienie = Zamowienie.objects.get(id=order_id)
-    
-    stary_status = zamowienie.status
-    zamowienie.status = payload.status
-    zamowienie.save()
-    
-    # Tworzymy Log do historii zmian
-    user = User.objects.filter(username=request.auth.get('username')).first()
-    HistoriaStatusowZamowienia.objects.create(
-        zamowienie=zamowienie,
-        stary_status=stary_status,
-        nowy_status=payload.status,
-        zmienione_przez=user
-    )
-    return {"success": True}
 
 # ==========================================
-# MODUŁ ZARZĄDZANIA KLIENTAMI (PANEL PRACOWNIKA)
+# PROFIL UŻYTKOWNIKA (/me)
 # ==========================================
 
-# Schemat pomocniczy do wylistowania zamówień w profilu klienta
-class ZamowienieKlientaSchema(Schema):
-    id: int
-    data_zamowienia: str
-    status: str
-    kwota: float
+class UserProfileSchema(Schema):
+    username: str
+    email: str
+    imie: str = ""
+    nazwisko: str = ""
+    nr_tel: str = ""
+
+@api.get("/me", response=UserProfileSchema, auth=auth)
+def get_me(request):
+    user = User.objects.get(username=request.auth['username'])
+    klient = Klient.objects.filter(user=user).first()
     
-    @staticmethod
-    def resolve_data_zamowienia(obj):
-        return obj.data_zamowienia.strftime("%Y-%m-%d %H:%M")
+    return {
+        "username": user.username,
+        "email": user.email,
+        "imie": klient.imie if klient else user.first_name,
+        "nazwisko": klient.nazwisko if klient else user.last_name,
+        "nr_tel": klient.nr_tel if klient else ""
+    }
 
-    @staticmethod
-    def resolve_kwota(obj):
-        try:
-            return float(obj.platnosc.kwota)
-        except Exception:
-            suma = sum(float(p.cena_sprzedazy) * p.ilosc for p in obj.pozycje.all())
-            if hasattr(obj, 'dostawa') and obj.dostawa:
-                suma += float(obj.dostawa.cena_dostawy)
-            if hasattr(obj, 'rabat') and obj.rabat:
-                suma = suma * (1 - (float(obj.rabat.procent) / 100))
-            return round(suma, 2)
-
-
-# Główny schemat Klienta dla panelu
-class AdminKlientSchema(Schema):
-    id: int
+class ProfileUpdateSchema(Schema):
     imie: str
     nazwisko: str
     email: str
-    telefon: str
-    typ: str
-    liczba_zamowien: int
-    laczna_kwota: float
-    zamowienia: List[ZamowienieKlientaSchema]
+    nr_tel: str
 
-    @staticmethod
-    def resolve_telefon(obj):
-        return obj.nr_tel
-
-    @staticmethod
-    def resolve_typ(obj):
-        return "Zarejestrowany" if obj.user else "Gość"
-
-    @staticmethod
-    def resolve_liczba_zamowien(obj):
-        return obj.zamowienie_set.count()
-
-    @staticmethod
-    def resolve_zamowienia(obj):
-        # Pobiera wszystkie zamówienia tego klienta od najnowszych
-        return list(obj.zamowienie_set.all().order_by('-data_zamowienia'))
-
-    @staticmethod
-    def resolve_laczna_kwota(obj):
-        total = 0
-        for z in obj.zamowienie_set.all():
-            # Próbujemy odczytać gotową wpłatę
-            try:
-                total += float(z.platnosc.kwota)
-            except Exception:
-                # W razie braku płatności (np. pobranie), wyliczamy w locie z koszyka
-                suma = sum(float(p.cena_sprzedazy) * p.ilosc for p in z.pozycje.all())
-                if hasattr(z, 'dostawa') and z.dostawa:
-                    suma += float(z.dostawa.cena_dostawy)
-                if hasattr(z, 'rabat') and z.rabat:
-                    suma = suma * (1 - (float(z.rabat.procent) / 100))
-                total += suma
-        return round(total, 2)
-
-
-@api.get("/admin/klienci", response=List[AdminKlientSchema], auth=auth)
-def get_admin_klienci(request):
-    if not request.auth.get('is_staff'):
-        return 403, {"detail": "Brak uprawnień."}
+@api.put("/me", auth=auth)
+def update_me(request, payload: ProfileUpdateSchema):
+    user = User.objects.get(username=request.auth['username'])
     
-    # Optymalizacja zapytania - "dociągamy" powiązane dane z wyprzedzeniem
-    return Klient.objects.prefetch_related(
-        'zamowienie_set', 
-        'zamowienie_set__platnosc', 
-        'zamowienie_set__pozycje', 
-        'zamowienie_set__dostawa', 
-        'zamowienie_set__rabat',
-        'user'
-    ).all().order_by('-id')
+    user.email = payload.email
+    user.first_name = payload.imie
+    user.last_name = payload.nazwisko
+    user.save()
+
+    klient, created = Klient.objects.get_or_create(user=user)
+    klient.imie = payload.imie
+    klient.nazwisko = payload.nazwisko
+    klient.email = payload.email
+    klient.nr_tel = payload.nr_tel
+    klient.save()
+
+    return {
+        "success": True, 
+        "user": {
+            "username": user.username,
+            "email": user.email,
+            "imie": klient.imie,
+            "nazwisko": klient.nazwisko,
+            "nr_tel": klient.nr_tel
+        }
+    }

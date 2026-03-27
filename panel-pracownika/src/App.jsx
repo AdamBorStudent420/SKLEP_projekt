@@ -4,11 +4,15 @@ import {
   Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, IconButton,
   Button, Card, CardContent, Divider, Avatar, Alert, TextField,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
-  Chip, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions, Grid, Autocomplete, GlobalStyles
+  Chip, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions, Grid, Autocomplete, GlobalStyles,
+  Snackbar, Rating, Badge
 } from '@mui/material';
 import {
   LayoutDashboard, ShoppingBag, Package, Users, Settings, LogOut, Menu,
-  Clock, User, Plus, Trash2, ArrowLeft, Upload, ImageIcon, Search, List as ListIcon, Edit, Play
+  Clock, User, Plus, Trash2, ArrowLeft, Upload, ImageIcon, Search, List as ListIcon, Edit, Play,
+  Bold as BoldIcon, Italic as ItalicIcon, Underline as UnderlineIcon, ListOrdered,
+  AlignLeft, AlignCenter, AlignRight, AlignJustify, Link as LinkIcon2, Unlink, Eraser, Code, X, MessageSquare, Star,
+  AlertTriangle
 } from 'lucide-react';
 
 // --- MOTYW PANELU ADMINA ---
@@ -30,41 +34,103 @@ const adminTheme = createTheme({
 const DRAWER_WIDTH = 260;
 const API_BASE_URL = 'http://127.0.0.1:8000';
 
-// --- WBUDOWANY EDYTOR WYSIWYG ---
+// --- ZAAWANSOWANY EDYTOR WYSIWYG ---
 const NativeWysiwyg = ({ value, onChange }) => {
   const editorRef = useRef(null);
+  const [showSource, setShowSource] = useState(false);
 
   useEffect(() => {
-    if (editorRef.current && value !== editorRef.current.innerHTML) {
+    if (editorRef.current && value !== editorRef.current.innerHTML && !showSource) {
       editorRef.current.innerHTML = value || '';
     }
-  }, [value]);
+  }, [value, showSource]);
 
   const handleInput = () => {
     if (editorRef.current) onChange(editorRef.current.innerHTML);
   };
 
-  const handleCommand = (e, cmd) => {
+  const handleCommand = (e, cmd, arg = null) => {
     e.preventDefault();
-    document.execCommand(cmd, false, null);
+    document.execCommand(cmd, false, arg);
     handleInput();
+  };
+
+  const handleLink = (e) => {
+    e.preventDefault();
+    const url = prompt('Podaj adres URL (np. https://google.com):');
+    if (url) {
+      document.execCommand('createLink', false, url);
+      handleInput();
+    }
   };
 
   return (
     <Box sx={{ border: '1px solid rgba(255,255,255,0.2)', borderRadius: 1, bgcolor: 'background.default', mt: 1, width: '100%' }}>
-      <Box sx={{ borderBottom: '1px solid rgba(255,255,255,0.2)', p: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-        <Button size="small" variant="outlined" onMouseDown={(e) => handleCommand(e, 'bold')} sx={{ minWidth: 0, px: 2, color: '#fff', fontWeight: 'bold' }}>B</Button>
-        <Button size="small" variant="outlined" onMouseDown={(e) => handleCommand(e, 'italic')} sx={{ minWidth: 0, px: 2, color: '#fff', fontStyle: 'italic' }}>I</Button>
-        <Button size="small" variant="outlined" onMouseDown={(e) => handleCommand(e, 'insertUnorderedList')} sx={{ minWidth: 0, px: 2, color: '#fff' }}>• Lista</Button>
-        <Button size="small" variant="outlined" onMouseDown={(e) => handleCommand(e, 'insertOrderedList')} sx={{ minWidth: 0, px: 2, color: '#fff' }}>1. Lista</Button>
+      <Box sx={{ borderBottom: '1px solid rgba(255,255,255,0.2)', p: 1, display: 'flex', gap: 0.5, flexWrap: 'wrap', alignItems: 'center' }}>
+        <IconButton size="small" onMouseDown={(e) => handleCommand(e, 'bold')} title="Pogrubienie"><BoldIcon size={18} /></IconButton>
+        <IconButton size="small" onMouseDown={(e) => handleCommand(e, 'italic')} title="Kursywa"><ItalicIcon size={18} /></IconButton>
+        <IconButton size="small" onMouseDown={(e) => handleCommand(e, 'underline')} title="Podkreślenie"><UnderlineIcon size={18} /></IconButton>
+
+        <Divider orientation="vertical" flexItem sx={{ mx: 0.5, my: 1, borderColor: 'rgba(255,255,255,0.2)' }} />
+
+        <IconButton size="small" onMouseDown={(e) => handleCommand(e, 'insertUnorderedList')} title="Lista punktowana"><ListIcon size={18} /></IconButton>
+        <IconButton size="small" onMouseDown={(e) => handleCommand(e, 'insertOrderedList')} title="Lista numerowana"><ListOrdered size={18} /></IconButton>
+
+        <Divider orientation="vertical" flexItem sx={{ mx: 0.5, my: 1, borderColor: 'rgba(255,255,255,0.2)' }} />
+
+        <IconButton size="small" onMouseDown={(e) => handleCommand(e, 'justifyLeft')} title="Wyrównaj do lewej"><AlignLeft size={18} /></IconButton>
+        <IconButton size="small" onMouseDown={(e) => handleCommand(e, 'justifyCenter')} title="Wyśrodkuj"><AlignCenter size={18} /></IconButton>
+        <IconButton size="small" onMouseDown={(e) => handleCommand(e, 'justifyRight')} title="Wyrównaj do prawej"><AlignRight size={18} /></IconButton>
+        <IconButton size="small" onMouseDown={(e) => handleCommand(e, 'justifyFull')} title="Wyjustuj"><AlignJustify size={18} /></IconButton>
+
+        <Divider orientation="vertical" flexItem sx={{ mx: 0.5, my: 1, borderColor: 'rgba(255,255,255,0.2)' }} />
+
+        <IconButton size="small" onMouseDown={handleLink} title="Wstaw link"><LinkIcon2 size={18} /></IconButton>
+        <IconButton size="small" onMouseDown={(e) => handleCommand(e, 'unlink')} title="Usuń link"><Unlink size={18} /></IconButton>
+
+        <Divider orientation="vertical" flexItem sx={{ mx: 0.5, my: 1, borderColor: 'rgba(255,255,255,0.2)' }} />
+
+        <IconButton size="small" onMouseDown={(e) => handleCommand(e, 'removeFormat')} title="Usuń formatowanie"><Eraser size={18} /></IconButton>
+
+        <Box sx={{ flexGrow: 1 }} />
+
+        <Button
+          size="small"
+          startIcon={<Code size={18} />}
+          onClick={() => setShowSource(!showSource)}
+          sx={{ color: showSource ? 'primary.main' : 'text.secondary', fontWeight: 'bold' }}
+        >
+          HTML
+        </Button>
       </Box>
-      <Box
-        ref={editorRef}
-        contentEditable
-        onInput={handleInput}
-        onBlur={handleInput}
-        sx={{ p: 2, minHeight: '200px', outline: 'none', fontSize: '16px', '& ul, & ol': { pl: 3, my: 1 } }}
-      />
+
+      {showSource ? (
+        <TextField
+          multiline
+          fullWidth
+          minRows={8}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Wpisz kod HTML..."
+          sx={{ p: 1, '& .MuiInputBase-root': { fontFamily: 'monospace', fontSize: '14px' }, '& fieldset': { border: 'none' } }}
+        />
+      ) : (
+        <Box
+          ref={editorRef}
+          contentEditable
+          onInput={handleInput}
+          onBlur={handleInput}
+          sx={{
+            p: 2,
+            minHeight: '200px',
+            outline: 'none',
+            fontSize: '16px',
+            textAlign: 'left',
+            '& ul, & ol': { pl: 3, my: 1 },
+            '& a': { color: '#3b82f6', textDecoration: 'underline' }
+          }}
+        />
+      )}
     </Box>
   );
 };
@@ -72,13 +138,16 @@ const NativeWysiwyg = ({ value, onChange }) => {
 export default function AdminApp() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [activeView, setActiveView] = useState('DASHBOARD');
+  const chatEndRef = useRef(null);
 
   const [user, setUser] = useState(null);
   const [isLoginOpen, setIsLoginOpen] = useState(true);
   const [loginData, setLoginData] = useState({ username: '', password: '' });
   const [loginError, setLoginError] = useState('');
 
-  // --- STANY DLA ZAMÓWIEŃ ---
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const handleCloseSnackbar = () => setSnackbar({ ...snackbar, open: false });
+
   const [orders, setOrders] = useState([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [ordersError, setOrdersError] = useState('');
@@ -86,14 +155,26 @@ export default function AdminApp() {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [internalNotes, setInternalNotes] = useState('');
 
-  // --- STANY DLA KLIENTÓW ---
   const [customers, setCustomers] = useState([]);
   const [loadingCustomers, setLoadingCustomers] = useState(false);
   const [customersError, setCustomersError] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [searchCustomerQuery, setSearchCustomerQuery] = useState('');
 
-  // --- STANY DLA TOWARÓW ---
+  // --- STANY DLA OPINII ---
+  const [reviews, setReviews] = useState([]);
+  const [loadingReviews, setLoadingReviews] = useState(false);
+  const [selectedReview, setSelectedReview] = useState(null);
+  const [replyText, setReplyText] = useState('');
+
+  // --- STANY REKLAMACJI ---
+  const [complaints, setComplaints] = useState([]);
+  const [complaintStatuses, setComplaintStatuses] = useState([]);
+  const [loadingComplaints, setLoadingComplaints] = useState(false);
+  const [selectedComplaint, setSelectedComplaint] = useState(null);
+  const [complaintReplyText, setComplaintReplyText] = useState('');
+  const [viewedComplaints, setViewedComplaints] = useState({});
+
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
@@ -108,8 +189,13 @@ export default function AdminApp() {
     id: null, nazwa: '', producent: '', opis: '', cena_jednostkowa: '', cena_promocyjna: '',
     kategoria_id: '', podkategoria_id: '', ilosc_dostepna: 0, atrybuty: []
   });
+
   const [selectedImage, setSelectedImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
+
+  const [dodatkoweZdjeciaPliki, setDodatkoweZdjeciaPliki] = useState([]);
+  const [obecneDodatkoweZdjecia, setObecneDodatkoweZdjecia] = useState([]);
+  const [zdjeciaDoUsuniecia, setZdjeciaDoUsuniecia] = useState([]);
 
   const [isNewAttrOpen, setIsNewAttrOpen] = useState(false);
   const [newAttrValue, setNewAttrValue] = useState('');
@@ -119,16 +205,66 @@ export default function AdminApp() {
     const token = localStorage.getItem('admin_token');
     const username = localStorage.getItem('admin_username');
     if (token && username) { setUser({ username, token }); setIsLoginOpen(false); }
+
+    if (username) {
+      const viewed = localStorage.getItem(`viewedComplaints_${username}`);
+      if (viewed) setViewedComplaints(JSON.parse(viewed));
+    }
   }, []);
 
   useEffect(() => {
     if (user && activeView === 'ORDERS') fetchOrders();
     if (user && activeView === 'CUSTOMERS') fetchCustomers();
+    if (user && activeView === 'REVIEWS') fetchReviews();
+    if (user && activeView === 'COMPLAINTS') {
+      fetchComplaints();
+      fetchComplaintStatuses();
+    }
+    if (user && activeView === 'DASHBOARD') fetchComplaints();
     if (user && (activeView === 'PRODUCTS' || activeView === 'PRODUCT_FORM')) {
       if (activeView === 'PRODUCTS') fetchProducts();
       fetchCategories();
     }
   }, [activeView, user]);
+
+  useEffect(() => {
+    if (activeView === 'PRODUCT_FORM' && productForm.podkategoria_id) {
+      const fetchFilteredAttributes = async () => {
+        try {
+          const res = await fetch(`${API_BASE_URL}/api/atrybuty/?podkategoria_id=${productForm.podkategoria_id}`);
+          if (res.ok) {
+            const data = await res.json();
+            setAvailableAttributes(data);
+          } else {
+            setAvailableAttributes([]);
+          }
+        } catch (err) {
+          console.error("Błąd pobierania atrybutów dla podkategorii:", err);
+          setAvailableAttributes([]);
+        }
+      };
+      fetchFilteredAttributes();
+    } else if (activeView === 'PRODUCT_FORM' && !productForm.podkategoria_id) {
+      setAvailableAttributes([]);
+    }
+  }, [productForm.podkategoria_id, activeView]);
+
+  // Utrzymywanie zsynchronizowanego czatu & odhaczanie nowej wiadomości
+  useEffect(() => {
+    if (activeView === 'COMPLAINT_DETAILS' && selectedComplaint) {
+      const comp = complaints.find(c => c.id === selectedComplaint.id);
+      if (comp) {
+        setSelectedComplaint(comp);
+        const msgCount = comp.wiadomosci ? comp.wiadomosci.length : 0;
+        const newViewed = { ...viewedComplaints, [comp.id]: msgCount };
+        setViewedComplaints(newViewed);
+        if (user?.username) localStorage.setItem(`viewedComplaints_${user.username}`, JSON.stringify(newViewed));
+      }
+    }
+    if (activeView === 'COMPLAINT_DETAILS' && chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [complaints, activeView]);
 
   const handleDrawerToggle = () => setMobileOpen(!mobileOpen);
 
@@ -151,7 +287,6 @@ export default function AdminApp() {
     setUser(null); setIsLoginOpen(true);
   };
 
-  // --- API FETCHERS ---
   const fetchOrders = async () => {
     setLoadingOrders(true); setOrdersError('');
     try {
@@ -164,6 +299,22 @@ export default function AdminApp() {
     } catch (err) { setOrdersError(err.message); } finally { setLoadingOrders(false); }
   };
 
+  const refreshOrdersData = async (orderIdToSelect = null) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/zamowienia/admin/lista`, {
+        headers: { 'Authorization': `Bearer ${user.token}`, 'Content-Type': 'application/json' }
+      });
+      if (response.ok) {
+        const freshOrders = await response.json();
+        setOrders(freshOrders);
+        if (orderIdToSelect) {
+          const freshOrder = freshOrders.find(o => o.id === orderIdToSelect);
+          if (freshOrder) setSelectedOrder(freshOrder);
+        }
+      }
+    } catch (err) { console.error("Błąd odświeżania danych z bazy:", err); }
+  };
+
   const fetchCustomers = async () => {
     setLoadingCustomers(true); setCustomersError('');
     try {
@@ -174,6 +325,57 @@ export default function AdminApp() {
       if (!response.ok) throw new Error('Nie udało się pobrać klientów z bazy.');
       setCustomers(await response.json());
     } catch (err) { setCustomersError(err.message); } finally { setLoadingCustomers(false); }
+  };
+
+  const fetchReviews = async () => {
+    setLoadingReviews(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/admin/opinie`, {
+        headers: { 'Authorization': `Bearer ${user.token}` }
+      });
+      if (response.status === 401 || response.status === 403) { handleLogout(); throw new Error('Sesja wygasła.'); }
+      if (response.ok) {
+        setReviews(await response.json());
+      }
+    } catch (err) { console.error(err); } finally { setLoadingReviews(false); }
+  };
+
+  // --- REKLAMACJE POBIERANIE CZATU I STATUSÓW ---
+  const fetchComplaints = async () => {
+    setLoadingComplaints(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/admin/reklamacje`, {
+        headers: { 'Authorization': `Bearer ${user.token}` }
+      });
+      if (response.status === 401 || response.status === 403) { handleLogout(); throw new Error('Sesja wygasła.'); }
+      if (response.ok) setComplaints(await response.json());
+    } catch (err) { console.error(err); } finally { setLoadingComplaints(false); }
+  };
+
+  const fetchComplaintStatuses = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/admin/reklamacje/statusy`, {
+        headers: { 'Authorization': `Bearer ${user.token}` }
+      });
+      if (response.ok) setComplaintStatuses(await response.json());
+    } catch (err) { console.error(err); }
+  };
+
+  // Zmiana statusu reklamacji
+  const handleStatusChange = async (complaintId, newStatusId) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/admin/reklamacje/${complaintId}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${user.token}` },
+        body: JSON.stringify({ status_id: parseInt(newStatusId) })
+      });
+      if (!res.ok) throw new Error("Błąd zmiany statusu.");
+      const data = await res.json();
+      setSnackbar({ open: true, message: `Status pomyślnie zmieniony na: ${data.nowy_status}`, severity: 'success' });
+      fetchComplaints(); // Pobierz świeżą listę, zaktualizuje to też otwarty modal
+    } catch (err) {
+      setSnackbar({ open: true, message: err.message, severity: 'error' });
+    }
   };
 
   const fetchProducts = async () => {
@@ -191,7 +393,6 @@ export default function AdminApp() {
     } catch (err) { console.error(err); }
   };
 
-  // --- ZAMÓWIENIA LOGIKA ---
   const openOrderDetails = (order) => {
     setSelectedOrder(order);
     setInternalNotes(order.uwagi_wewnetrzne || '');
@@ -206,9 +407,8 @@ export default function AdminApp() {
         body: JSON.stringify({ status: newStatus })
       });
       if (!res.ok) throw new Error('Nie udało się zaktualizować statusu.');
-      const updatedOrder = { ...selectedOrder, status: newStatus };
-      setSelectedOrder(updatedOrder);
-      setOrders(orders.map(o => o.id === orderId ? updatedOrder : o));
+      await refreshOrdersData(orderId);
+      setSnackbar({ open: true, message: `Status zamówienia zmieniony na: ${newStatus}`, severity: 'success' });
     } catch (e) { alert(e.message); }
   };
 
@@ -220,20 +420,68 @@ export default function AdminApp() {
         body: JSON.stringify({ uwagi: internalNotes })
       });
       if (!res.ok) throw new Error('Nie udało się zapisać uwag.');
-      setSelectedOrder({ ...selectedOrder, uwagi_wewnetrzne: internalNotes });
-      setOrders(orders.map(o => o.id === selectedOrder.id ? { ...o, uwagi_wewnetrzne: internalNotes } : o));
-      alert('Uwagi wewnętrzne zapisano pomyślnie!');
+      await refreshOrdersData(selectedOrder.id);
+      setSnackbar({ open: true, message: 'Notatki wewnętrzne zapisane pomyślnie!', severity: 'success' });
     } catch (e) { alert(e.message); }
   };
 
-  // --- TOWARY LOGIKA ---
+  const markOrderAsPaid = async (orderId) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/zamowienia/admin/${orderId}/oznacz-oplacone`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${user.token}`, 'Content-Type': 'application/json' }
+      });
+      if (!res.ok) throw new Error('Nie udało się zaktualizować statusu płatności.');
+      await refreshOrdersData(orderId);
+      setSnackbar({ open: true, message: 'Płatność została ręcznie zaksięgowana!', severity: 'success' });
+    } catch (e) { alert(e.message); }
+  };
+
+  const handleSaveReply = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/admin/opinie/${selectedReview.id}/odpowiedz`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${user.token}` },
+        body: JSON.stringify({ odpowiedz: replyText })
+      });
+      if (!res.ok) throw new Error("Nie udało się zapisać odpowiedzi.");
+      setSnackbar({ open: true, message: 'Odpowiedź zapisana pomyślnie!', severity: 'success' });
+      fetchReviews();
+      setSelectedReview({ ...selectedReview, odpowiedz_pracownika: replyText });
+    } catch (err) {
+      setSnackbar({ open: true, message: err.message, severity: 'error' });
+    }
+  };
+
+  const handleSaveComplaintReply = async () => {
+    if (!complaintReplyText.trim()) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/admin/reklamacje/${selectedComplaint.id}/odpowiedz`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${user.token}` },
+        body: JSON.stringify({ odpowiedz: complaintReplyText })
+      });
+      if (!res.ok) throw new Error("Nie udało się zapisać odpowiedzi na reklamację.");
+      setSnackbar({ open: true, message: 'Odpowiedź na reklamację wysłana!', severity: 'success' });
+      setComplaintReplyText('');
+      fetchComplaints();
+    } catch (err) {
+      setSnackbar({ open: true, message: err.message, severity: 'error' });
+    }
+  };
+
   const handleAddNewProductClick = () => {
     setIsEditing(false);
     setProductForm({
       id: null, nazwa: '', producent: '', opis: '', cena_jednostkowa: '', cena_promocyjna: '',
       kategoria_id: '', podkategoria_id: '', ilosc_dostepna: 0, atrybuty: []
     });
-    setSelectedImage(null); setImagePreview(null); setActiveView('PRODUCT_FORM');
+    setSelectedImage(null);
+    setImagePreview(null);
+    setObecneDodatkoweZdjecia([]);
+    setDodatkoweZdjeciaPliki([]);
+    setZdjeciaDoUsuniecia([]);
+    setActiveView('PRODUCT_FORM');
   };
 
   const handleEditProductClick = (product) => {
@@ -244,12 +492,38 @@ export default function AdminApp() {
       kategoria_id: product.kategoria_id || '', podkategoria_id: product.podkategoria_id || '',
       ilosc_dostepna: product.ilosc_dostepna || 0, atrybuty: product.atrybuty ? [...product.atrybuty] : []
     });
-    setSelectedImage(null); setImagePreview(product.zdjecie ? `${API_BASE_URL}${product.zdjecie}` : null); setActiveView('PRODUCT_FORM');
+    setSelectedImage(null);
+    setImagePreview(product.zdjecie ? (product.zdjecie.startsWith('http') ? product.zdjecie : `${API_BASE_URL}${product.zdjecie}`) : null);
+
+    setObecneDodatkoweZdjecia(product.dodatkowe_zdjecia || []);
+    setDodatkoweZdjeciaPliki([]);
+    setZdjeciaDoUsuniecia([]);
+
+    setActiveView('PRODUCT_FORM');
   };
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) { setSelectedImage(file); setImagePreview(URL.createObjectURL(file)); }
+  };
+
+  const handleAddAdditionalImages = (e) => {
+    const files = Array.from(e.target.files);
+    const newImages = files.map(file => ({
+      file: file,
+      preview: URL.createObjectURL(file)
+    }));
+    setDodatkoweZdjeciaPliki(prev => [...prev, ...newImages]);
+    e.target.value = null;
+  };
+
+  const removeNewImage = (index) => {
+    setDodatkoweZdjeciaPliki(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const removeExistingImage = (id) => {
+    setZdjeciaDoUsuniecia(prev => [...prev, id]);
+    setObecneDodatkoweZdjecia(prev => prev.filter(img => img.id !== id));
   };
 
   const addAttribute = () => setProductForm({ ...productForm, atrybuty: [...productForm.atrybuty, { nazwa: '', wartosc: '' }] });
@@ -267,19 +541,54 @@ export default function AdminApp() {
     try {
       const formData = new FormData();
       const payloadData = {
-        nazwa: productForm.nazwa, producent: productForm.producent, opis: productForm.opis,
-        cena_jednostkowa: parseFloat(productForm.cena_jednostkowa), cena_promocyjna: productForm.cena_promocyjna ? parseFloat(productForm.cena_promocyjna) : null,
-        ilosc_dostepna: parseInt(productForm.ilosc_dostepna, 10), kategoria_id: productForm.kategoria_id ? parseInt(productForm.kategoria_id) : null,
-        podkategoria_id: productForm.podkategoria_id ? parseInt(productForm.podkategoria_id) : null, atrybuty: productForm.atrybuty.filter(a => a.nazwa.trim() !== '' && a.wartosc.trim() !== '')
+        nazwa: productForm.nazwa,
+        producent: productForm.producent,
+        opis: productForm.opis,
+        cena_jednostkowa: parseFloat(productForm.cena_jednostkowa),
+        cena_promocyjna: productForm.cena_promocyjna ? parseFloat(productForm.cena_promocyjna) : null,
+        ilosc_dostepna: parseInt(productForm.ilosc_dostepna, 10),
+        kategoria_id: productForm.kategoria_id ? parseInt(productForm.kategoria_id) : null,
+        podkategoria_id: productForm.podkategoria_id ? parseInt(productForm.podkategoria_id) : null,
+        atrybuty: productForm.atrybuty.filter(a => a.nazwa && a.nazwa.trim() !== '' && a.wartosc && a.wartosc.trim() !== '')
       };
+
       formData.append('payload', JSON.stringify(payloadData));
-      if (selectedImage) formData.append('zdjecie', selectedImage);
+
+      if (selectedImage instanceof File) {
+        formData.append('zdjecie', selectedImage);
+      }
+
+      if (dodatkoweZdjeciaPliki && dodatkoweZdjeciaPliki.length > 0) {
+        dodatkoweZdjeciaPliki.forEach(imgObj => {
+          if (imgObj && imgObj.file instanceof File) {
+            formData.append('dodatkowe_zdjecia', imgObj.file);
+          }
+        });
+      }
+
+      if (zdjeciaDoUsuniecia && zdjeciaDoUsuniecia.length > 0) {
+        formData.append('usuniete_zdjecia', JSON.stringify(zdjeciaDoUsuniecia));
+      }
 
       const endpoint = isEditing ? `${API_BASE_URL}/api/admin/produkty/${productForm.id}/` : `${API_BASE_URL}/api/admin/produkty/`;
-      const response = await fetch(endpoint, { method: 'POST', headers: { 'Authorization': `Bearer ${user.token}` }, body: formData });
-      if (!response.ok) { const errorData = await response.json(); throw new Error(errorData.detail || "Błąd zapisu."); }
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${user.token}` },
+        body: formData
+      });
+
+      if (!response.ok) throw new Error("Błąd zapisu.");
+
+      setSnackbar({
+        open: true,
+        message: isEditing ? 'Zmiany w produkcie zostały zapisane pomyślnie!' : 'Nowy produkt został dodany pomyślnie do bazy!',
+        severity: 'success'
+      });
       setActiveView('PRODUCTS');
-    } catch (err) { alert("Błąd: " + err.message); }
+    } catch (err) {
+      setSnackbar({ open: true, message: `Błąd: ${err.message}`, severity: 'error' });
+    }
   };
 
   const getStatusProps = (status) => {
@@ -291,22 +600,41 @@ export default function AdminApp() {
     return map[status] || { color: 'default', label: status };
   };
 
+  // Bardzo precyzyjne zliczanie NOWYCH i NIEPRZECZYTANYCH wiadomości
+  const pendingComplaintsCount = complaints.filter(c => {
+    if (!c.wiadomosci || c.wiadomosci.length === 0) return true; // Zupełnie nowe zgłoszenie
+    const lastMsg = c.wiadomosci[c.wiadomosci.length - 1];
+    if (lastMsg.autor === 'KLIENT') {
+      const viewedCount = viewedComplaints[c.id] || 0;
+      if (viewedCount < c.wiadomosci.length) return true; // Klient napisał coś nowego, czego nie widzieliśmy
+    }
+    return false;
+  }).length;
+
   // --- KOMPONENTY WIDOKÓW ---
   const renderDashboard = () => (
     <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', pt: 4 }}>
       <Typography variant="h3" fontWeight="bold" sx={{ mb: 1, textAlign: 'center' }}>Witaj w Panelu, {user?.username}!</Typography>
       <Typography variant="subtitle1" color="text.secondary" sx={{ mb: 6, textAlign: 'center' }}>Wybierz moduł, którym chcesz zarządzać, korzystając z poniższych skrótów:</Typography>
-      <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 4, justifyContent: 'center', maxWidth: 1200, width: '100%', mx: 'auto', px: 2 }}>
+      <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 4, justifyContent: 'center', maxWidth: 1200, width: '100%', mx: 'auto', px: 2, flexWrap: 'wrap' }}>
         {[
-          { id: 'ORDERS', title: 'Zamówienia', desc: 'Przeglądaj i realizuj zamówienia klientów', icon: <ShoppingBag size={48} color="#fff" />, bg: '#3b82f6' },
-          { id: 'PRODUCTS', title: 'Magazyn i Towary', desc: 'Zarządzaj asortymentem i stanami magazynowymi', icon: <Package size={48} color="#fff" />, bg: '#10b981' },
-          { id: 'CUSTOMERS', title: 'Klienci', desc: 'Przeglądaj bazę zarejestrowanych klientów', icon: <Users size={48} color="#fff" />, bg: '#8b5cf6' },
+          { id: 'ORDERS', title: 'Zamówienia', desc: 'Przeglądaj i realizuj zamówienia', icon: <ShoppingBag size={40} color="#fff" />, bg: '#3b82f6' },
+          { id: 'PRODUCTS', title: 'Towary', desc: 'Zarządzaj asortymentem', icon: <Package size={40} color="#fff" />, bg: '#10b981' },
+          { id: 'CUSTOMERS', title: 'Klienci', desc: 'Baza zarejestrowanych klientów', icon: <Users size={40} color="#fff" />, bg: '#8b5cf6' },
+          { id: 'REVIEWS', title: 'Opinie Klientów', desc: 'Moderuj wpisy i oceny', icon: <MessageSquare size={40} color="#fff" />, bg: '#f59e0b' },
+          {
+            id: 'COMPLAINTS',
+            title: 'Reklamacje',
+            desc: pendingComplaintsCount > 0 ? `${pendingComplaintsCount} wiadomość(i) czeka na Ciebie!` : 'Wszystko odczytane',
+            icon: <Badge badgeContent={pendingComplaintsCount} color="error"><AlertTriangle size={40} color="#fff" /></Badge>,
+            bg: '#ef4444'
+          },
         ].map((tile) => (
-          <Card key={tile.id} sx={{ flex: 1, bgcolor: tile.bg, display: 'flex', flexDirection: 'column', cursor: 'pointer', transition: 'transform 0.2s, box-shadow 0.2s', '&:hover': { transform: 'translateY(-8px)', boxShadow: '0 12px 24px rgba(0,0,0,0.3)' } }} onClick={() => setActiveView(tile.id)}>
-            <CardContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', p: 4, flexGrow: 1 }}>
-              <Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.2)', borderRadius: '50%', mb: 2 }}>{tile.icon}</Box>
-              <Typography variant="h5" color="white" fontWeight="bold" gutterBottom sx={{ fontSize: { xs: '1.25rem', md: '1.5rem' } }}>{tile.title}</Typography>
-              <Typography variant="body2" color="rgba(255,255,255,0.8)" sx={{ fontSize: { xs: '0.85rem', md: '0.9rem' } }}>{tile.desc}</Typography>
+          <Card key={tile.id} sx={{ minWidth: 220, flex: 1, bgcolor: tile.bg, display: 'flex', flexDirection: 'column', cursor: 'pointer', transition: 'transform 0.2s, box-shadow 0.2s', '&:hover': { transform: 'translateY(-8px)', boxShadow: '0 12px 24px rgba(0,0,0,0.3)' } }} onClick={() => setActiveView(tile.id)}>
+            <CardContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', p: 3, flexGrow: 1 }}>
+              <Box sx={{ p: 1.5, bgcolor: 'rgba(255,255,255,0.2)', borderRadius: '50%', mb: 2 }}>{tile.icon}</Box>
+              <Typography variant="h6" color="white" fontWeight="bold" gutterBottom>{tile.title}</Typography>
+              <Typography variant="body2" color="rgba(255,255,255,0.8)">{tile.desc}</Typography>
             </CardContent>
           </Card>
         ))}
@@ -445,8 +773,17 @@ export default function AdminApp() {
               <Typography variant="caption" color="text.secondary" fontWeight="bold">ADRES DOSTAWY</Typography><Typography variant="body1" sx={{ mb: 2 }}>{order.adres_dostawy || 'Brak danych'}</Typography>
               <Typography variant="caption" color="text.secondary" fontWeight="bold">RODZAJ DOSTAWY</Typography><Typography variant="body1" sx={{ mb: 2 }}>{order.dostawa_nazwa || 'Brak danych'}</Typography>
               <Typography variant="caption" color="text.secondary" fontWeight="bold">METODA PŁATNOŚCI</Typography><Typography variant="body1" sx={{ mb: 2 }}>{paymentMethod}</Typography>
+
               <Typography variant="caption" color="text.secondary" fontWeight="bold">STATUS PŁATNOŚCI</Typography>
-              <Typography variant="body1" sx={{ mb: 2 }} color={!order.status_platnosci || order.status_platnosci === 'Brak płatności' ? 'error.light' : 'success.light'} fontWeight="bold">{order.status_platnosci || 'Brak płatności'}</Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                <Typography variant="body1" color={!order.status_platnosci || order.status_platnosci === 'Brak płatności' ? 'error.light' : order.status_platnosci === 'Zakończona' ? 'success.light' : 'warning.light'} fontWeight="bold">
+                  {order.status_platnosci || 'Brak płatności'}
+                </Typography>
+                {order.status_platnosci === 'Oczekująca' && (
+                  <Button size="small" variant="outlined" color="success" onClick={() => markOrderAsPaid(order.id)}>Oznacz jako Opłacone</Button>
+                )}
+              </Box>
+
               <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.1)' }} />
               <Typography variant="caption" color="text.secondary" fontWeight="bold">RABAT</Typography><Typography variant="body1" color="primary.light" sx={{ mb: 2 }}>{order.rabat_info || 'Brak'}</Typography>
               <Typography variant="caption" color="text.secondary" fontWeight="bold">ŁĄCZNA KWOTA DO ZAPŁATY</Typography><Typography variant="h5" fontWeight="bold" color="secondary.main">{order.kwota ? order.kwota.toFixed(2) : '0.00'} zł</Typography>
@@ -463,7 +800,6 @@ export default function AdminApp() {
     );
   };
 
-  // --- KLIENCI LOGIKA I WIDOKI ---
   const renderCustomersList = () => {
     const filteredCustomers = customers.filter(c => {
       const searchStr = searchCustomerQuery.toLowerCase();
@@ -701,7 +1037,7 @@ export default function AdminApp() {
           <TextField select fullWidth label="Kategoria" value={productForm.kategoria_id || ''} onChange={e => setProductForm({ ...productForm, kategoria_id: e.target.value, podkategoria_id: '', atrybuty: [] })} SelectProps={{ native: true }}>
             <option value=""></option>{categories.map(c => <option key={c.id} value={c.id}>{c.nazwa_kategorii}</option>)}
           </TextField>
-          <TextField select fullWidth label="Podkategoria" value={productForm.podkategoria_id || ''} onChange={e => setProductForm({ ...productForm, podkategoria_id: e.target.value })} SelectProps={{ native: true }} disabled={!productForm.kategoria_id}>
+          <TextField select fullWidth label="Podkategoria" value={productForm.podkategoria_id || ''} onChange={e => setProductForm({ ...productForm, podkategoria_id: e.target.value, atrybuty: [] })} SelectProps={{ native: true }} disabled={!productForm.kategoria_id}>
             <option value=""></option>{categories.find(c => c.id === parseInt(productForm.kategoria_id))?.podkategorie.map(sub => <option key={sub.id} value={sub.id}>{sub.nazwa}</option>)}
           </TextField>
         </Box>
@@ -716,14 +1052,52 @@ export default function AdminApp() {
       </Paper>
 
       <Paper sx={{ p: 4, mb: 4, borderRadius: 2, width: '100%' }}>
-        <Typography variant="h6" sx={{ mb: 3 }}>4. Media</Typography>
+        <Typography variant="h6" sx={{ mb: 3 }}>4. Media (Zdjęcia Produktu)</Typography>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, width: '100%' }}>
-          <Box sx={{ width: '100%', height: 250, bgcolor: 'background.default', borderRadius: 2, border: '2px dashed rgba(255,255,255,0.2)', display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }}>
-            {imagePreview ? <Box component="img" src={imagePreview} sx={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <ImageIcon size={48} color="rgba(255,255,255,0.2)" />}
+
+          <Typography variant="subtitle2" color="text.secondary">Zdjęcie Główne * (Widoczne na liście)</Typography>
+          <Box sx={{ display: 'flex', gap: 3, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+            <Box sx={{ width: 200, height: 200, bgcolor: 'background.default', borderRadius: 2, border: '2px dashed rgba(255,255,255,0.2)', display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', flexShrink: 0 }}>
+              {imagePreview ? <Box component="img" src={imagePreview} sx={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <ImageIcon size={48} color="rgba(255,255,255,0.2)" />}
+            </Box>
+            <Button variant="outlined" component="label" startIcon={<Upload size={18} />} sx={{ alignSelf: 'center' }}>
+              {imagePreview ? 'Zmień zdjęcie główne' : 'Wgraj zdjęcie główne'}
+              <input type="file" hidden accept="image/*" onChange={handleImageChange} />
+            </Button>
           </Box>
-          <Button variant="outlined" component="label" startIcon={<Upload size={18} />} fullWidth>
-            {imagePreview ? 'Zmień zdjęcie' : 'Wgraj zdjęcie z dysku'}<input type="file" hidden accept="image/*" onChange={handleImageChange} />
+
+          <Divider sx={{ my: 1, borderColor: 'rgba(255,255,255,0.1)' }} />
+
+          <Typography variant="subtitle2" color="text.secondary">Dodatkowe Zdjęcia (Galeria w szczegółach)</Typography>
+          <Button variant="outlined" component="label" startIcon={<Plus size={18} />}>
+            Kliknij, aby dodać zdjęcia do galerii
+            <input type="file" hidden multiple accept="image/*" onChange={handleAddAdditionalImages} />
           </Button>
+
+          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+            {obecneDodatkoweZdjecia.map(img => (
+              <Box key={`ex-${img.id}`} sx={{ position: 'relative', width: 100, height: 100, bgcolor: 'background.default', borderRadius: 2, p: 0.5, border: '1px solid rgba(255,255,255,0.1)' }}>
+                <img src={`${API_BASE_URL}${img.url}`} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt="galeria" />
+                <IconButton size="small" color="error" onClick={() => removeExistingImage(img.id)} sx={{ position: 'absolute', top: -10, right: -10, bgcolor: 'background.paper', '&:hover': { bgcolor: 'error.main', color: '#fff' } }}>
+                  <X size={14} />
+                </IconButton>
+              </Box>
+            ))}
+            {dodatkoweZdjeciaPliki.map((imgObj, idx) => (
+              <Box key={`new-${idx}`} sx={{ position: 'relative', width: 100, height: 100, bgcolor: 'background.default', borderRadius: 2, p: 0.5, border: '1px dashed #3b82f6' }}>
+                <img src={imgObj.preview} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt="nowe" />
+                <IconButton size="small" color="error" onClick={() => removeNewImage(idx)} sx={{ position: 'absolute', top: -10, right: -10, bgcolor: 'background.paper', '&:hover': { bgcolor: 'error.main', color: '#fff' } }}>
+                  <X size={14} />
+                </IconButton>
+              </Box>
+            ))}
+            {obecneDodatkoweZdjecia.length === 0 && dodatkoweZdjeciaPliki.length === 0 && (
+              <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic', py: 2 }}>
+                Brak zdjęć dodatkowych. Twoja galeria na stronie sklepu będzie pusta.
+              </Typography>
+            )}
+          </Box>
+
         </Box>
       </Paper>
 
@@ -736,25 +1110,78 @@ export default function AdminApp() {
 
       <Paper sx={{ p: 4, mb: 4, borderRadius: 2, width: '100%' }}>
         <Typography variant="h6" sx={{ mb: 3 }}>6. Wartości atrybutów</Typography>
-        {productForm.atrybuty.length > 0 && (
-          <Grid container spacing={2} sx={{ mb: 1, px: 1 }}>
-            <Grid item xs={12} sm={5}><Typography variant="caption" color="text.secondary" fontWeight="bold">ATRYBUT</Typography></Grid>
-            <Grid item xs={12} sm={6}><Typography variant="caption" color="text.secondary" fontWeight="bold">WARTOŚĆ</Typography></Grid>
-            <Grid item xs={12} sm={1} sx={{ textAlign: 'center' }}><Typography variant="caption" color="text.secondary" fontWeight="bold">USUŃ</Typography></Grid>
-          </Grid>
+
+        {!productForm.podkategoria_id ? (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            Wybierz najpierw podkategorię w sekcji "Kategoryzacja", aby wczytać odpowiednie atrybuty i móc je dodawać.
+          </Alert>
+        ) : (
+          <Box>
+            {productForm.atrybuty.length > 0 && (
+              <Box sx={{ display: 'flex', gap: 2, mb: 1, px: 1 }}>
+                <Typography variant="caption" color="text.secondary" fontWeight="bold" sx={{ flex: 1 }}>ATRYBUT</Typography>
+                <Typography variant="caption" color="text.secondary" fontWeight="bold" sx={{ flex: 1 }}>WARTOŚĆ</Typography>
+                <Box sx={{ width: 40 }} />
+              </Box>
+            )}
+
+            {productForm.atrybuty.length === 0 && (
+              <Typography color="text.secondary" sx={{ fontStyle: 'italic', py: 2, px: 1 }}>
+                Brak atrybutów. Kliknij poniżej, aby dodać nowy atrybut do tego towaru.
+              </Typography>
+            )}
+
+            {productForm.atrybuty.map((attr, index) => {
+              const selectedAttrTemplate = availableAttributes.find(a => a.nazwa === attr.nazwa);
+              const suggestedValues = selectedAttrTemplate?.wartosci || [];
+
+              return (
+                <Box key={index} sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2, width: '100%' }}>
+                  <Box sx={{ display: 'flex', flex: 1, gap: 1 }}>
+                    <Autocomplete
+                      freeSolo
+                      options={availableAttributes.map((option) => option.nazwa)}
+                      value={attr.nazwa}
+                      onInputChange={(event, newInputValue) => updateAttribute(index, 'nazwa', newInputValue)}
+                      sx={{ flexGrow: 1 }}
+                      renderInput={(params) => <TextField {...params} label="Wybierz lub wpisz atrybut" />}
+                    />
+                    <IconButton
+                      size="large"
+                      sx={{ color: '#10b981', bgcolor: 'rgba(16, 185, 129, 0.1)', '&:hover': { bgcolor: 'rgba(16, 185, 129, 0.2)' }, flexShrink: 0, borderRadius: 1 }}
+                      onClick={() => {
+                        setNewAttrTargetIndex(index);
+                        setIsNewAttrOpen(true);
+                      }}
+                      title="Dodaj nowy atrybut do bazy"
+                    >
+                      <Plus size={24} />
+                    </IconButton>
+                  </Box>
+
+                  <Autocomplete
+                    freeSolo
+                    options={suggestedValues}
+                    value={attr.wartosc}
+                    onInputChange={(event, newInputValue) => updateAttribute(index, 'wartosc', newInputValue)}
+                    sx={{ flex: 1 }}
+                    renderInput={(params) => <TextField {...params} label="Wybierz lub wpisz wartość" placeholder="np. 16 GB" />}
+                  />
+
+                  <IconButton color="error" onClick={() => removeAttribute(index)} sx={{ width: 40, height: 40 }}>
+                    <Trash2 size={24} />
+                  </IconButton>
+                </Box>
+              );
+            })}
+
+            <Box sx={{ mt: 3 }}>
+              <Button startIcon={<Plus size={18} />} onClick={addAttribute} variant="outlined" color="primary" sx={{ fontWeight: 'bold' }}>
+                Dodaj kolejny atrybut
+              </Button>
+            </Box>
+          </Box>
         )}
-        {productForm.atrybuty.length === 0 && <Typography color="text.secondary" sx={{ fontStyle: 'italic', py: 2, px: 1 }}>Brak atrybutów. Wybierz z listy rozwijanej lub kliknij poniżej, aby dodać nowy.</Typography>}
-        {productForm.atrybuty.map((attr, index) => (
-          <Grid container spacing={2} key={index} sx={{ mb: 2, alignItems: 'center' }}>
-            <Grid item xs={12} sm={5} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Autocomplete freeSolo options={availableAttributes.map((option) => option.nazwa)} value={attr.nazwa} onInputChange={(event, newInputValue) => updateAttribute(index, 'nazwa', newInputValue)} sx={{ flexGrow: 1 }} renderInput={(params) => <TextField {...params} label="Wybierz lub wpisz" size="small" />} />
-              <IconButton size="small" sx={{ color: '#10b981', bgcolor: 'rgba(16, 185, 129, 0.1)', '&:hover': { bgcolor: 'rgba(16, 185, 129, 0.2)' }, flexShrink: 0 }} onClick={() => { setNewAttrTargetIndex(index); setIsNewAttrOpen(true); }}><Plus size={18} /></IconButton>
-            </Grid>
-            <Grid item xs={12} sm={6}><TextField fullWidth size="small" placeholder="np. 16 GB" value={attr.wartosc} onChange={e => updateAttribute(index, 'wartosc', e.target.value)} /></Grid>
-            <Grid item xs={12} sm={1} sx={{ display: 'flex', justifyContent: 'center' }}><IconButton color="error" size="small" onClick={() => removeAttribute(index)}><Trash2 size={20} /></IconButton></Grid>
-          </Grid>
-        ))}
-        <Box sx={{ mt: 2 }}><Button startIcon={<Plus size={16} />} onClick={addAttribute} sx={{ textTransform: 'none', fontWeight: 'bold' }}>Dodaj kolejną Wartość atrybutu</Button></Box>
       </Paper>
 
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 4, bgcolor: 'background.paper', p: 3, borderRadius: 2, borderTop: '1px solid rgba(255,255,255,0.1)', width: '100%' }}>
@@ -766,15 +1193,36 @@ export default function AdminApp() {
 
       {/* --- WYSKAKUJĄCE OKIENKO ZIELONEGO PLUSIKA --- */}
       <Dialog open={isNewAttrOpen} onClose={() => setIsNewAttrOpen(false)}>
-        <DialogTitle>Dodaj nowy atrybut do słownika</DialogTitle>
-        <DialogContent><TextField autoFocus margin="dense" fullWidth variant="standard" label="Nazwa atrybutu (np. Rozdzielczość)" value={newAttrValue} onChange={e => setNewAttrValue(e.target.value)} /></DialogContent>
+        <DialogTitle>Dodaj nowy atrybut do bazy</DialogTitle>
+        <DialogContent><TextField autoFocus margin="dense" fullWidth variant="standard" label="Nazwa atrybutu (np. Rodzaj matrycy)" value={newAttrValue} onChange={e => setNewAttrValue(e.target.value)} /></DialogContent>
         <DialogActions>
           <Button onClick={() => setIsNewAttrOpen(false)} color="inherit">Anuluj</Button>
-          <Button onClick={() => {
+          <Button onClick={async () => {
             if (newAttrValue.trim()) {
               const newName = newAttrValue.trim();
-              setAvailableAttributes([...availableAttributes, { id: Date.now(), nazwa: newName }]);
-              if (newAttrTargetIndex !== null) { updateAttribute(newAttrTargetIndex, 'nazwa', newName); }
+
+              try {
+                const res = await fetch(`${API_BASE_URL}/api/admin/atrybuty`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${user.token}` },
+                  body: JSON.stringify({
+                    nazwa: newName,
+                    podkategoria_id: parseInt(productForm.podkategoria_id)
+                  })
+                });
+
+                if (!res.ok) throw new Error("Nie udało się dodać atrybutu do bazy. Sprawdź backend.");
+
+                const addedAttr = await res.json();
+                setAvailableAttributes([...availableAttributes, addedAttr]);
+
+                if (newAttrTargetIndex !== null) {
+                  updateAttribute(newAttrTargetIndex, 'nazwa', addedAttr.nazwa);
+                }
+                setSnackbar({ open: true, message: `Atrybut "${newName}" dodany do bazy!`, severity: 'success' });
+              } catch (err) {
+                setSnackbar({ open: true, message: err.message, severity: 'error' });
+              }
             }
             setIsNewAttrOpen(false); setNewAttrValue('');
           }} color="primary" variant="contained">Dodaj i wybierz</Button>
@@ -783,10 +1231,310 @@ export default function AdminApp() {
     </Box>
   );
 
+  // --- WIDOK OPINII KLIENTÓW ---
+  const renderReviewsList = () => {
+    return (
+      <Box sx={{ width: '100%', maxWidth: 1400, mx: 'auto' }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+          <Typography variant="h5" fontWeight="bold">Opinie Klientów</Typography>
+          <Button variant="outlined" startIcon={<Clock size={16} />} onClick={fetchReviews}>Odśwież Listę</Button>
+        </Box>
+
+        <TableContainer component={Paper} sx={{ borderRadius: 2, width: '100%' }}>
+          {loadingReviews ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 5 }}><CircularProgress /></Box>
+          ) : (
+            <Table>
+              <TableHead sx={{ bgcolor: 'rgba(255,255,255,0.05)' }}>
+                <TableRow>
+                  <TableCell width="60">ID</TableCell>
+                  <TableCell width="300">Produkt</TableCell>
+                  <TableCell>Opinia</TableCell>
+                  <TableCell align="center" width="150">Ocena</TableCell>
+                  <TableCell align="center" width="150">Akcje</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {reviews.length === 0 ? (
+                  <TableRow><TableCell colSpan={5} align="center" sx={{ py: 4 }}><Typography color="text.secondary">Klienci nie dodali jeszcze żadnej opinii.</Typography></TableCell></TableRow>
+                ) : (
+                  reviews.map((rev) => (
+                    <TableRow key={rev.id} hover sx={{ cursor: 'pointer' }} onClick={() => { setSelectedReview(rev); setReplyText(rev.odpowiedz_pracownika || ''); setActiveView('REVIEW_DETAILS'); }}>
+                      <TableCell fontWeight="bold">#{rev.id}</TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                          {rev.towar_zdjecie ? (
+                            <Box component="img" src={`${API_BASE_URL}${rev.towar_zdjecie}`} sx={{ width: 40, height: 40, objectFit: 'contain', bgcolor: 'white', borderRadius: 1 }} />
+                          ) : (
+                            <Box sx={{ width: 40, height: 40, bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><ImageIcon size={20} color="rgba(255,255,255,0.2)" /></Box>
+                          )}
+                          <Typography variant="body2" sx={{ fontWeight: 600, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{rev.towar_nazwa}</Typography>
+                        </Box>
+                      </TableCell>
+                      <TableCell sx={{ color: 'text.secondary', fontStyle: 'italic' }}>"{rev.tresc_skrocona}"</TableCell>
+                      <TableCell align="center"><Rating value={rev.ocena} readOnly size="small" /></TableCell>
+                      <TableCell align="center">
+                        <Button size="small" variant="contained" color="primary" onClick={(e) => { e.stopPropagation(); setSelectedReview(rev); setReplyText(rev.odpowiedz_pracownika || ''); setActiveView('REVIEW_DETAILS'); }}>Pełna treść</Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
+        </TableContainer>
+      </Box>
+    );
+  };
+
+  const renderReviewDetails = () => {
+    if (!selectedReview) return null;
+    const rev = selectedReview;
+    return (
+      <Box sx={{ width: '100%', maxWidth: 800, mx: 'auto', pb: 8 }}>
+        <Button startIcon={<ArrowLeft size={20} />} onClick={() => { setSelectedReview(null); setActiveView('REVIEWS'); }} sx={{ mb: 3, color: 'text.secondary' }}>Wróć do listy opinii</Button>
+        <Typography variant="h4" fontWeight="bold" sx={{ mb: 4, display: 'flex', alignItems: 'center', gap: 2 }}><MessageSquare color="#f59e0b" /> Szczegóły Opinii #{rev.id}</Typography>
+
+        <Paper sx={{ p: 4, borderRadius: 2, bgcolor: 'background.paper' }}>
+          <Box sx={{ display: 'flex', gap: 3, mb: 4, alignItems: 'center', pb: 3, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+            {rev.towar_zdjecie ? (
+              <Box component="img" src={`${API_BASE_URL}${rev.towar_zdjecie}`} sx={{ width: 80, height: 80, objectFit: 'contain', bgcolor: 'white', borderRadius: 2, p: 1 }} />
+            ) : (
+              <Box sx={{ width: 80, height: 80, bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><ImageIcon size={30} color="rgba(255,255,255,0.2)" /></Box>
+            )}
+            <Box>
+              <Typography variant="caption" color="text.secondary">DOTYCZY PRODUKTU</Typography>
+              <Typography variant="h6" fontWeight="bold">{rev.towar_nazwa}</Typography>
+            </Box>
+          </Box>
+
+          <Box sx={{ mb: 4 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>OCENA KLIENTA</Typography>
+            <Rating value={rev.ocena} readOnly size="large" />
+          </Box>
+
+          <Box sx={{ mb: 4 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>TREŚĆ OPINII</Typography>
+            <Typography variant="body1" sx={{ p: 3, bgcolor: 'rgba(0,0,0,0.2)', borderRadius: 2, fontStyle: 'italic', lineHeight: 1.7 }}>
+              "{rev.pelna_tresc}"
+            </Typography>
+          </Box>
+
+          <Grid container spacing={3}>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="text.secondary">AUTOR OPINII</Typography>
+              <Typography variant="body1" fontWeight="bold" sx={{ mt: 0.5 }}>{rev.klient_dane}</Typography>
+            </Grid>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="text.secondary">DATA WYSTAWIENIA</Typography>
+              <Typography variant="body1" fontWeight="bold" sx={{ mt: 0.5 }}>{rev.data_wystawienia}</Typography>
+            </Grid>
+          </Grid>
+
+          <Divider sx={{ my: 3, borderColor: 'rgba(255,255,255,0.1)' }} />
+
+          <Box sx={{ mt: 3 }}>
+            <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}><MessageSquare size={20} /> Odpowiedź sklepu</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Zostanie ona wyświetlona publicznie pod opinią klienta na stronie produktu.</Typography>
+            <TextField
+              fullWidth
+              multiline
+              rows={4}
+              placeholder="Wpisz oficjalną odpowiedź..."
+              value={replyText}
+              onChange={(e) => setReplyText(e.target.value)}
+              sx={{ mb: 2, bgcolor: 'background.default' }}
+            />
+            <Button variant="contained" color="primary" onClick={handleSaveReply}>
+              Zapisz / Aktualizuj odpowiedź
+            </Button>
+          </Box>
+
+        </Paper>
+      </Box>
+    );
+  };
+
+  // --- WIDOK REKLAMACJI ---
+  const renderComplaintsList = () => {
+    return (
+      <Box sx={{ width: '100%', maxWidth: 1400, mx: 'auto' }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+          <Typography variant="h5" fontWeight="bold">Zarządzanie Reklamacjami</Typography>
+          <Button variant="outlined" startIcon={<Clock size={16} />} onClick={fetchComplaints}>Odśwież Listę</Button>
+        </Box>
+
+        <TableContainer component={Paper} sx={{ borderRadius: 2, width: '100%' }}>
+          {loadingComplaints ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 5 }}><CircularProgress /></Box>
+          ) : (
+            <Table>
+              <TableHead sx={{ bgcolor: 'rgba(255,255,255,0.05)' }}>
+                <TableRow>
+                  <TableCell width="60">ID</TableCell>
+                  <TableCell width="150">Zamówienie</TableCell>
+                  <TableCell width="250">Klient</TableCell>
+                  <TableCell>Ostatnia wiadomość</TableCell>
+                  <TableCell width="150">Zgłoszono</TableCell>
+                  <TableCell align="center" width="150">Stan Konwersacji</TableCell>
+                  <TableCell align="center" width="120">Akcje</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {complaints.length === 0 ? (
+                  <TableRow><TableCell colSpan={7} align="center" sx={{ py: 4 }}><Typography color="text.secondary">Klienci nie zgłosili jeszcze żadnych reklamacji.</Typography></TableCell></TableRow>
+                ) : (
+                  complaints.map((comp) => {
+                    let isNewMessage = false;
+                    if (!comp.wiadomosci || comp.wiadomosci.length === 0) isNewMessage = true;
+                    else {
+                      const lastMsg = comp.wiadomosci[comp.wiadomosci.length - 1];
+                      if (lastMsg.autor === 'KLIENT') {
+                        const viewedCount = viewedComplaints[comp.id] || 0;
+                        if (viewedCount < comp.wiadomosci.length) isNewMessage = true;
+                      }
+                    }
+
+                    return (
+                      <TableRow key={comp.id} hover sx={{ cursor: 'pointer', bgcolor: isNewMessage ? 'rgba(239, 68, 68, 0.08)' : 'inherit' }} onClick={() => openComplaintDetails(comp)}>
+                        <TableCell fontWeight="bold">#{comp.id}</TableCell>
+                        <TableCell><Chip label={`Zam. #${comp.zamowienie_id}`} size="small" variant="outlined" color="primary" /></TableCell>
+                        <TableCell>{comp.klient_dane}</TableCell>
+                        <TableCell sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
+                          "{comp.wiadomosci?.length > 0 ? comp.wiadomosci[comp.wiadomosci.length - 1].tresc.substring(0, 40) + '...' : comp.tresc_skrocona}"
+                        </TableCell>
+                        <TableCell>{comp.data_zgloszenia}</TableCell>
+                        <TableCell align="center">
+                          {isNewMessage ? (
+                            <Chip label="Nowa wiadomość" color="error" size="small" />
+                          ) : (
+                            <Chip label="Oczekuje na klienta" color="success" size="small" />
+                          )}
+                        </TableCell>
+                        <TableCell align="center">
+                          <Button size="small" variant="contained" color="primary" onClick={(e) => { e.stopPropagation(); openComplaintDetails(comp); }}>Czat</Button>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })
+                )}
+              </TableBody>
+            </Table>
+          )}
+        </TableContainer>
+      </Box>
+    );
+  };
+
+  const openComplaintDetails = (comp) => {
+    setSelectedComplaint(comp);
+    setComplaintReplyText('');
+    setActiveView('COMPLAINT_DETAILS');
+
+    const msgCount = comp.wiadomosci ? comp.wiadomosci.length : 0;
+    const newViewed = { ...viewedComplaints, [comp.id]: msgCount };
+    setViewedComplaints(newViewed);
+    if (user?.username) localStorage.setItem(`viewedComplaints_${user.username}`, JSON.stringify(newViewed));
+  };
+
+  const renderComplaintDetails = () => {
+    if (!selectedComplaint) return null;
+    const comp = selectedComplaint;
+    return (
+      <Box sx={{ width: '100%', maxWidth: 800, mx: 'auto', pb: 8 }}>
+        <Button startIcon={<ArrowLeft size={20} />} onClick={() => { setSelectedComplaint(null); setActiveView('COMPLAINTS'); }} sx={{ mb: 3, color: 'text.secondary' }}>Wróć do listy reklamacji</Button>
+        <Typography variant="h4" fontWeight="bold" sx={{ mb: 4, display: 'flex', alignItems: 'center', gap: 2 }}><AlertTriangle color="#ef4444" /> Konwersacja Zgłoszenia #{comp.id}</Typography>
+
+        <Paper sx={{ p: 4, borderRadius: 2, bgcolor: 'background.paper' }}>
+
+          <Box sx={{ display: 'flex', gap: 3, mb: 4, alignItems: 'center', pb: 3, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+            <Box>
+              <Typography variant="caption" color="text.secondary">POWIĄZANE ZAMÓWIENIE</Typography>
+              <Typography variant="h6" fontWeight="bold" color="primary.main">Numer #{comp.zamowienie_id}</Typography>
+            </Box>
+            <Button variant="outlined" size="small" onClick={() => {
+              const order = orders.find(o => o.id === comp.zamowienie_id);
+              if (order) openOrderDetails(order);
+              else { setSnackbar({ open: true, message: 'Przejdź do zakładki Zamówienia aby odświeżyć.', severity: 'info' }) }
+            }}>Przejdź do zamówienia</Button>
+
+            <Box sx={{ ml: 'auto' }}>
+              <TextField
+                select
+                size="small"
+                label="Zmień Status"
+                value={comp.status_id || ''}
+                onChange={(e) => handleStatusChange(comp.id, e.target.value)}
+                SelectProps={{ native: true }}
+                sx={{ minWidth: 200 }}
+              >
+                <option value="" disabled>Wybierz status...</option>
+                {complaintStatuses.map(s => (
+                  <option key={s.id} value={s.id}>{s.nazwa}</option>
+                ))}
+              </TextField>
+            </Box>
+          </Box>
+
+          <Grid container spacing={3}>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="text.secondary">DANE KLIENTA</Typography>
+              <Typography variant="body1" fontWeight="bold" sx={{ mt: 0.5 }}>{comp.klient_dane}</Typography>
+            </Grid>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="text.secondary">ZŁOŻONO DNIA</Typography>
+              <Typography variant="body1" fontWeight="bold" sx={{ mt: 0.5 }}>{comp.data_zgloszenia}</Typography>
+            </Grid>
+          </Grid>
+
+          <Divider sx={{ my: 3, borderColor: 'rgba(255,255,255,0.1)' }} />
+
+          <Box sx={{ mt: 3 }}>
+            <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}><MessageSquare size={20} /> Konwersacja z klientem</Typography>
+
+            <Box sx={{ maxHeight: 400, overflowY: 'auto', mb: 3, p: 2, bgcolor: 'rgba(0,0,0,0.2)', borderRadius: 2 }}>
+              <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-start' }}>
+                <Paper sx={{ p: 1.5, maxWidth: '80%', bgcolor: '#334155', color: '#f8fafc', borderRadius: 2, boxShadow: 'none', borderLeft: '4px solid #ef4444' }}>
+                  <Typography variant="caption" sx={{ color: '#94a3b8', display: 'block', mb: 0.5 }}>Klient (Zgłoszenie początkowe) • {comp.data_zgloszenia}</Typography>
+                  <Typography variant="body2" sx={{ fontStyle: 'italic' }}>{comp.pelna_tresc}</Typography>
+                </Paper>
+              </Box>
+              {comp.wiadomosci && comp.wiadomosci.map((msg, idx) => (
+                <Box key={idx} sx={{ display: 'flex', justifyContent: msg.autor === 'SKLEP' ? 'flex-end' : 'flex-start', mb: 2 }}>
+                  <Paper sx={{ p: 1.5, maxWidth: '80%', bgcolor: msg.autor === 'SKLEP' ? '#3b82f6' : '#334155', color: '#f8fafc', borderRadius: 2, boxShadow: 'none', borderRight: msg.autor === 'SKLEP' ? '4px solid #60a5fa' : 'none', borderLeft: msg.autor === 'KLIENT' ? '4px solid #10b981' : 'none' }}>
+                    <Typography variant="caption" sx={{ opacity: 0.7, display: 'block', mb: 0.5 }}>
+                      {msg.autor === 'SKLEP' ? 'Ty (Obsługa Sklepu)' : 'Klient'} • {msg.data_wyslania}
+                    </Typography>
+                    <Typography variant="body2">{msg.tresc}</Typography>
+                  </Paper>
+                </Box>
+              ))}
+              <div ref={chatEndRef} />
+            </Box>
+
+            <TextField
+              fullWidth
+              multiline
+              rows={3}
+              placeholder="Wpisz wiadomość do klienta..."
+              value={complaintReplyText}
+              onChange={(e) => setComplaintReplyText(e.target.value)}
+              sx={{ mb: 2, bgcolor: 'background.default' }}
+            />
+            <Button variant="contained" color="success" onClick={handleSaveComplaintReply} disabled={!complaintReplyText.trim()}>
+              Wyślij odpowiedź
+            </Button>
+          </Box>
+
+        </Paper>
+      </Box>
+    );
+  };
+
   const drawer = (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <Toolbar sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
-        <Typography variant="h6" fontWeight="900" color="primary.light" sx={{ letterSpacing: 0.5, fontSize: '1.25rem', whiteSpace: 'nowrap' }}>TECH<span style={{ color: '#fff' }}>BACKOFFICE</span></Typography>
+        <Typography variant="h6" fontWeight="550" color="primary.light" sx={{ letterSpacing: 0.5, fontSize: '1.25rem', whiteSpace: 'nowrap' }}>PANEL <span style={{ color: '#fff' }}>PRACOWNIKA</span></Typography>
       </Toolbar>
       <Divider sx={{ borderColor: '#334155' }} />
       <List sx={{ px: 2, pt: 2, flexGrow: 1 }}>
@@ -795,11 +1543,15 @@ export default function AdminApp() {
           { id: 'ORDERS', label: 'Zamówienia', icon: <ShoppingBag /> },
           { id: 'PRODUCTS', label: 'Magazyn i Towary', icon: <Package /> },
           { id: 'CUSTOMERS', label: 'Klienci', icon: <Users /> },
+          { id: 'REVIEWS', label: 'Opinie klientów', icon: <MessageSquare /> },
+          { id: 'COMPLAINTS', label: 'Reklamacje (Czat)', icon: pendingComplaintsCount > 0 ? <Badge badgeContent={pendingComplaintsCount} color="error"><AlertTriangle /></Badge> : <AlertTriangle /> },
         ].map((item) => {
           const isActive = activeView === item.id ||
             (activeView === 'ORDER_DETAILS' && item.id === 'ORDERS') ||
             (activeView === 'PRODUCT_FORM' && item.id === 'PRODUCTS') ||
-            (activeView === 'CUSTOMER_DETAILS' && item.id === 'CUSTOMERS');
+            (activeView === 'CUSTOMER_DETAILS' && item.id === 'CUSTOMERS') ||
+            (activeView === 'REVIEW_DETAILS' && item.id === 'REVIEWS') ||
+            (activeView === 'COMPLAINT_DETAILS' && item.id === 'COMPLAINTS');
           return (
             <ListItem key={item.id} disablePadding sx={{ mb: 1 }}>
               <ListItemButton selected={isActive} onClick={() => setActiveView(item.id)} sx={{ borderRadius: 2, '&.Mui-selected': { bgcolor: 'primary.main', color: '#fff' }, '&.Mui-selected .MuiListItemIcon-root': { color: '#fff' } }}>
@@ -868,8 +1620,24 @@ export default function AdminApp() {
           {activeView === 'PRODUCT_FORM' && renderProductForm()}
           {activeView === 'CUSTOMERS' && renderCustomersList()}
           {activeView === 'CUSTOMER_DETAILS' && renderCustomerDetails()}
+          {activeView === 'REVIEWS' && renderReviewsList()}
+          {activeView === 'REVIEW_DETAILS' && renderReviewDetails()}
+          {activeView === 'COMPLAINTS' && renderComplaintsList()}
+          {activeView === 'COMPLAINT_DETAILS' && renderComplaintDetails()}
         </Box>
       </Box>
+
+      {/* GLOBALNY SNACKBAR NA POWIADOMIENIA */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }} variant="filled">
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </ThemeProvider>
   );
 }

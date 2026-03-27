@@ -5,7 +5,8 @@ from .models import (
     Kategoria, Podkategoria, Towar, Magazyn, Zamowienie, 
     PozycjaZamowienia, StatusPlatnosci, Platnosc, Atrybut, 
     WartoscAtrybutu, Opinia, StatusReklamacji, Reklamacja,
-    HistoriaStatusowZamowienia
+    HistoriaStatusowZamowienia,
+    ZdjecieTowaru, MetodaPlatnosci
 )
 
 # ==========================================
@@ -60,6 +61,11 @@ class HistoriaStatusowInline(admin.TabularInline):
     readonly_fields = ('data_zmiany', 'nowy_status', 'zmienione_przez', 'stary_status')
     can_delete = False
 
+# DODANO: Poprawnie sformatowana klasa dla dodatkowych zdjęć
+class ZdjecieTowaruInline(admin.TabularInline):
+    model = ZdjecieTowaru
+    extra = 1
+
 # ==========================================
 # ADMIN CLASSES (Konfiguracja widoków)
 # ==========================================
@@ -79,7 +85,8 @@ class TowarAdmin(admin.ModelAdmin):
     list_display = ('nazwa', 'kategoria', 'producent', 'cena_jednostkowa', 'wyswietl_promocje', 'miniatura_zdjecia')
     list_filter = ('kategoria', 'producent')
     search_fields = ('nazwa', 'producent', 'opis')
-    inlines = [MagazynInline, WartoscAtrybutuInline]
+    # DODANO: ZdjecieTowaruInline dołączone do widoku edycji towaru
+    inlines = [MagazynInline, WartoscAtrybutuInline, ZdjecieTowaruInline]
     readonly_fields = ('miniatura_zdjecia_podglad',)
 
     class Media:
@@ -129,13 +136,11 @@ class TowarAdmin(admin.ModelAdmin):
 
     def pobierz_atrybuty(self, request, podkategoria_id):
         from django.http import JsonResponse
-        from .models import Atrybut
         atrybuty = list(Atrybut.objects.filter(podkategorie__id=podkategoria_id).values('id', 'nazwa'))
         return JsonResponse(atrybuty, safe=False)
 
     def pobierz_podkategorie(self, request, kategoria_id):
         from django.http import JsonResponse
-        from .models import Podkategoria
         podkategorie = list(Podkategoria.objects.filter(kategoria_id=kategoria_id).values('id', 'nazwa'))
         return JsonResponse(podkategorie, safe=False)
 
@@ -172,7 +177,6 @@ class AtrybutKategoriaFilter(admin.SimpleListFilter):
     parameter_name = 'kategoria'
 
     def lookups(self, request, model_admin):
-        from .models import Kategoria
         return [(k.id, k.nazwa_kategorii) for k in Kategoria.objects.all()]
 
     def queryset(self, request, queryset):
@@ -185,7 +189,6 @@ class AtrybutPodkategoriaFilter(admin.SimpleListFilter):
     parameter_name = 'podkategoria'
 
     def lookups(self, request, model_admin):
-        from .models import Podkategoria
         kategoria_id = request.GET.get('kategoria')
         if kategoria_id:
             podkategorie = Podkategoria.objects.filter(kategoria_id=kategoria_id)
@@ -218,5 +221,6 @@ admin.site.register(Dostawa)
 admin.site.register(Rabat)
 admin.site.register(Pracownik)
 admin.site.register(StatusPlatnosci)
+admin.site.register(MetodaPlatnosci)
 admin.site.register(StatusReklamacji)
 admin.site.register(Reklamacja)

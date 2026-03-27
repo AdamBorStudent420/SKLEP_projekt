@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.core.validators import MinValueValidator, MaxValueValidator
+from django.core.exceptions import ValidationError
 from ckeditor.fields import RichTextField
 
 
@@ -138,7 +139,6 @@ class Towar(models.Model):
 
     def clean(self):
         super().clean()
-        from django.core.exceptions import ValidationError
         
         if self.kategoria_id and self.podkategoria_id:
             if self.podkategoria.kategoria_id != self.kategoria_id:
@@ -249,11 +249,24 @@ class StatusPlatnosci(models.Model):
         return self.nazwa
 
 
+class MetodaPlatnosci(models.Model):
+    nazwa = models.CharField(max_length=100)
+    aktywna = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "metody_platnosci"
+        verbose_name = "Metoda płatności"
+        verbose_name_plural = "Metody płatności"
+
+    def __str__(self):
+        return self.nazwa
+
 class Platnosc(models.Model):
     zamowienie = models.OneToOneField(Zamowienie, on_delete=models.CASCADE, related_name='platnosc')
     data_platnosci = models.DateTimeField()
     kwota = models.DecimalField(max_digits=10, decimal_places=2)
-    metoda = models.CharField(max_length=100)
+    # --- ZMIENIONO: metoda jest teraz powiązana relacyjnie ---
+    metoda = models.ForeignKey(MetodaPlatnosci, on_delete=models.PROTECT)
     status = models.ForeignKey(StatusPlatnosci, on_delete=models.PROTECT)
 
     class Meta:
@@ -263,7 +276,6 @@ class Platnosc(models.Model):
 
     def __str__(self):
         return f"Płatność za {self.zamowienie}"
-
 
 class Atrybut(models.Model):
     nazwa = models.CharField(max_length=50)
@@ -291,7 +303,6 @@ class WartoscAtrybutu(models.Model):
 
     def clean(self):
         super().clean()
-        from django.core.exceptions import ValidationError
         
         if self.towar_id and self.atrybut_id:
             # Upewniamy się, że towar ma przypisaną podkategorię
@@ -316,12 +327,11 @@ class WartoscAtrybutu(models.Model):
 class Opinia(models.Model):
     klient = models.ForeignKey(Klient, on_delete=models.CASCADE)
     towar = models.ForeignKey(Towar, on_delete=models.CASCADE, related_name="opinie")
-    # Zmiana ekspercka: Walidacja ocen z poziomu bazy danych dla bezpieczeństwa komponentów UI.
-    ocena = models.SmallIntegerField(
-        validators=[MinValueValidator(1), MaxValueValidator(5)]
-    )
+    ocena = models.SmallIntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
     tresc = models.TextField()
     data_wystawienia = models.DateTimeField()
+    odpowiedz_pracownika = models.TextField(blank=True, null=True)
+    data_odpowiedzi = models.DateTimeField(blank=True, null=True)
 
     class Meta:
         db_table = "opinie"
@@ -345,10 +355,10 @@ class StatusReklamacji(models.Model):
 
 
 class Reklamacja(models.Model):
+    pozycja = models.ForeignKey(PozycjaZamowienia, on_delete=models.CASCADE, related_name='reklamacje')
     opis = models.TextField()
     data_zgloszenia = models.DateTimeField()
     status = models.ForeignKey(StatusReklamacji, on_delete=models.PROTECT)
-    pozycja = models.ForeignKey(PozycjaZamowienia, on_delete=models.CASCADE, null=True, blank=True)
 
     class Meta:
         db_table = "reklamacje"
@@ -356,4 +366,31 @@ class Reklamacja(models.Model):
         verbose_name_plural = "Reklamacje"
 
     def __str__(self):
-        return f"Reklamacja {self.id}"
+        return f"Reklamacja do {self.pozycja}"
+
+class ZdjecieTowaru(models.Model):
+    towar = models.ForeignKey('Towar', on_delete=models.CASCADE, related_name='dodatkowe_zdjecia')
+    zdjecie = models.ImageField(upload_to="towary_dodatkowe/")
+
+    class Meta:
+        db_table = "zdjecia_towarow"
+        verbose_name = "Dodatkowe Zdjęcie"
+        verbose_name_plural = "Dodatkowe Zdjęcia"
+
+    def __str__(self):
+        return f"Galeria dla: {self.towar.nazwa}"
+
+class WiadomoscReklamacji(models.Model):
+    reklamacja = models.ForeignKey(Reklamacja, on_delete=models.CASCADE, related_name='wiadomosci')
+    tresc = models.TextField()
+    autor = models.CharField(max_length=10, choices=[('SKLEP', 'Sklep'), ('KLIENT', 'Klient')])
+    data_wyslania = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "wiadomosci_reklamacji"
+        verbose_name = "Wiadomość reklamacji"
+        verbose_name_plural = "Wiadomości reklamacji"
+        ordering = ['data_wyslania']
+
+    def __str__(self):
+        return f"Wiadomość ({self.autor}) do reklamacji #{self.reklamacja.id}"
