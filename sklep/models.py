@@ -172,8 +172,6 @@ class Magazyn(models.Model):
 
 
 class Zamowienie(models.Model):
-    # Zmiana architektoniczna: Używamy zamkniętego zbioru wyborów (Choices).
-    # Gwarantuje to spójność danych dla frontendu.
     class StatusZamowienia(models.TextChoices):
         NOWE = 'NOWE', 'Nowe'
         OPLACONE = 'OPLACONE', 'Opłacone'
@@ -193,6 +191,9 @@ class Zamowienie(models.Model):
         choices=StatusZamowienia.choices, 
         default=StatusZamowienia.NOWE
     )
+    
+    # --- NOWE: Notatki dla pracownikow ----
+    uwagi_wewnetrzne = models.TextField(blank=True, null=True, help_text="Notatki widoczne tylko w panelu pracownika")
 
     class Meta:
         db_table = "zamowienia"
@@ -201,6 +202,23 @@ class Zamowienie(models.Model):
 
     def __str__(self):
         return f"Zamówienie {self.id} - {self.get_status_display()}"
+
+# --- NOWE: Tabela przechowująca historię zmian statusu zamówienia ---
+class HistoriaStatusowZamowienia(models.Model):
+    zamowienie = models.ForeignKey(Zamowienie, on_delete=models.CASCADE, related_name='historia_statusow')
+    stary_status = models.CharField(max_length=30, blank=True, null=True)
+    nowy_status = models.CharField(max_length=30)
+    data_zmiany = models.DateTimeField(auto_now_add=True)
+    zmienione_przez = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, help_text="Konto pracownika (User), które zmieniło status")
+
+    class Meta:
+        db_table = "historia_statusow_zamowienia"
+        verbose_name = "Historia statusu"
+        verbose_name_plural = "Historie statusów"
+        ordering = ['-data_zmiany']
+
+    def __str__(self):
+        return f"{self.zamowienie.id}: {self.nowy_status} ({self.data_zmiany.strftime('%Y-%m-%d %H:%M')})"
 
 
 class PozycjaZamowienia(models.Model):

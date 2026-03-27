@@ -13,13 +13,14 @@ from ninja.security import HttpBearer
 from .models import (
     Klient, Adres, Towar, Magazyn,
     Zamowienie, PozycjaZamowienia,
-    Dostawa, Rabat, StatusPlatnosci, Platnosc
+    Dostawa, Rabat, StatusPlatnosci, Platnosc,
+    HistoriaStatusowZamowienia  # <--- DODANY BRAKUJĄCY IMPORT
 )
 
 router = Router()
 
 # ==========================================
-# LOKALNA AUTORYZACJA JWT (Naprawia NameError)
+# LOKALNA AUTORYZACJA JWT
 # ==========================================
 class JWTAuth(HttpBearer):
     def authenticate(self, request, token):
@@ -51,7 +52,6 @@ class AdresSchema(Schema):
     miasto: str = ""
     kod_pocztowy: str = ""
 
-# Rozszerzony schemat zgodny z danymi wysyłanymi przez React (App.jsx)
 class ZamowienieSchema(Schema):
     is_guest: bool
     create_account: bool = False
@@ -64,31 +64,123 @@ class ZamowienieSchema(Schema):
     koszyk: List[PozycjaKoszykaSchema]
 
 
-# Schemat dla Panelu Pracownika (Admin)
+# --- NOWE SCHEMATY POMOCNICZE (Muszą być zdefiniowane PRZED AdminOrderSchema) ---
+class PozycjaZamowieniaSchema(Schema):
+    nazwa: str
+    ilosc: int
+    cena_sprzedazy: float
+    suma: float
+
+    @staticmethod
+    def resolve_nazwa(obj):
+        return obj.towar.nazwa
+        
+    @staticmethod
+    def resolve_suma(obj):
+        return float(obj.ilosc) * float(obj.cena_sprzedazy)
+
+class HistoriaStatusowSchema(Schema):
+    nowy_status: str
+    data_zmiany: datetime
+    zmienione_przez: str
+
+    @staticmethod
+    def resolve_zmienione_przez(obj):
+        try:
+            return obj.zmienione_przez.username if obj.zmienione_przez else "System"
+        except Exception:
+            return "System"
+
+
+# --- SCHEMAT DLA PANELU PRACOWNIKA (Admin) ---
 class AdminOrderSchema(Schema):
     id: int
     klient_dane: str
+    adres_dostawy: Optional[str] = None
+    dostawa_nazwa: Optional[str] = None
+    rabat_info: Optional[str] = None
+    status_platnosci: Optional[str] = None
     data_zamowienia: datetime
     status: str
     kwota: float
+    
+    # Nowe pola dla widoku szczegółów
+    telefon: Optional[str] = None
+    metoda_platnosci: Optional[str] = None
+    uwagi_wewnetrzne: Optional[str] = None
+    pozycje: Optional[List['PozycjaZamowieniaSchema']] = None
+    historia: Optional[List['HistoriaStatusowSchema']] = None
 
     @staticmethod
     def resolve_klient_dane(obj):
         return f"{obj.klient.imie} {obj.klient.nazwisko} ({obj.klient.email})"
 
     @staticmethod
+    def resolve_adres_dostawy(obj):
+        if hasattr(obj, 'adres') and obj.adres:
+            mieszkanie = f"/{obj.adres.nr_mieszkania}" if obj.adres.nr_mieszkania else ""
+            return f"{obj.adres.ulica} {obj.adres.nr_domu}{mieszkanie}, {obj.adres.kod_pocztowy} {obj.adres.miasto}"
+        return "Brak adresu"
+
+    @staticmethod
+    def resolve_dostawa_nazwa(obj):
+        if hasattr(obj, 'dostawa') and obj.dostawa:
+            return f"{obj.dostawa.rodzaj.nazwa} ({obj.dostawa.cena_dostawy} zł)"
+        return "Brak danych"
+
+    @staticmethod
+    def resolve_rabat_info(obj):
+        if hasattr(obj, 'rabat') and obj.rabat:
+            return f"{obj.rabat.nazwa} (-{obj.rabat.procent}%)"
+        return "Brak"
+
+    @staticmethod
+    def resolve_status_platnosci(obj):
+        try:
+            return obj.platnosc.status.nazwa
+        except Exception:
+            return "Brak płatności"
+
+    @staticmethod
     def resolve_kwota(obj):
-        # Próbuje pobrać kwotę z płatności (jeśli istnieje)
         try:
             return float(obj.platnosc.kwota)
         except Exception:
-            # Fallback: Obliczenie sumy na podstawie pozycji
             suma = sum(float(p.cena_sprzedazy) * p.ilosc for p in obj.pozycje.all())
-            if hasattr(obj, 'dostawa'):
+            if hasattr(obj, 'dostawa') and obj.dostawa:
                 suma += float(obj.dostawa.cena_dostawy)
             if hasattr(obj, 'rabat') and obj.rabat:
                 suma = suma * (1 - (float(obj.rabat.procent) / 100))
             return round(suma, 2)
+
+    # --- BEZPIECZNE RESOLVERY ---
+    @staticmethod
+    def resolve_telefon(obj):
+        try:
+            return obj.klient.nr_tel
+        except Exception:
+            return "Brak telefonu"
+
+    @staticmethod
+    def resolve_metoda_platnosci(obj):
+        try:
+            return obj.platnosc.metoda
+        except Exception:
+            return "Brak (nieopłacone)"
+
+    @staticmethod
+    def resolve_pozycje(obj):
+        try:
+            return list(obj.pozycje.all())
+        except Exception:
+            return []
+
+    @staticmethod
+    def resolve_historia(obj):
+        try:
+            return list(obj.historia_statusow.all())
+        except Exception:
+            return []
 
 
 # ============================
@@ -205,17 +297,51 @@ def create_order(request, data: ZamowienieSchema):
     return 200, {"success": True, "order_id": zamowienie.id}
 
 # ==========================================
-# ENDPOINT DLA PANELU PRACOWNIKA (ADMIN)
+# ENDPOINTY DLA PANELU PRACOWNIKA (ADMIN)
 # ==========================================
 
 @router.get("/admin/lista", response=List[AdminOrderSchema], auth=auth)
 def get_admin_orders(request):
-    """Pobiera wszystkie zamówienia dla widoku panelu pracownika."""
-    # Bezpieczeństwo: sprawdzamy w request.auth (z JWT) czy użytkownik jest personelem
     if not request.auth or not request.auth.get('is_staff'):
         return 403, {"detail": "Brak uprawnień. Zaloguj się jako pracownik."}
     
-    # Optymalizacja zapytań SQL przy użyciu select_related i prefetch_related
+    # Optymalizacja zapytania - pobieramy od razu pozycje i historię
     return Zamowienie.objects.select_related(
-        'klient', 'platnosc', 'dostawa', 'rabat'
-    ).prefetch_related('pozycje').order_by('-data_zamowienia')
+        'klient', 'adres', 'platnosc', 'platnosc__status', 'dostawa', 'dostawa__rodzaj', 'rabat'
+    ).prefetch_related(
+        'pozycje', 'pozycje__towar', 'historia_statusow', 'historia_statusow__zmienione_przez'
+    ).order_by('-data_zamowienia')
+
+
+class NotatkiSchema(Schema):
+    uwagi: str
+
+class ZmianaStatusuSchema(Schema):
+    status: str
+
+@router.post("/admin/{order_id}/uwagi", auth=auth)
+def update_uwagi(request, order_id: int, payload: NotatkiSchema):
+    if not request.auth.get('is_staff'): return 403, "Brak dostępu"
+    zamowienie = Zamowienie.objects.get(id=order_id)
+    zamowienie.uwagi_wewnetrzne = payload.uwagi
+    zamowienie.save()
+    return {"success": True}
+
+@router.post("/admin/{order_id}/status", auth=auth)
+def update_status(request, order_id: int, payload: ZmianaStatusuSchema):
+    if not request.auth.get('is_staff'): return 403, "Brak dostępu"
+    zamowienie = Zamowienie.objects.get(id=order_id)
+    
+    stary_status = zamowienie.status
+    zamowienie.status = payload.status
+    zamowienie.save()
+    
+    # Automatyczny wpis do Dziennika Zdarzeń (Historii Statusów)
+    user = User.objects.filter(username=request.auth.get('username')).first()
+    HistoriaStatusowZamowienia.objects.create(
+        zamowienie=zamowienie,
+        stary_status=stary_status,
+        nowy_status=payload.status,
+        zmienione_przez=user
+    )
+    return {"success": True}

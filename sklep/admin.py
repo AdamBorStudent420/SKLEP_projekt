@@ -4,7 +4,8 @@ from .models import (
     Klient, Adres, RodzajDostawy, Dostawa, Rabat, Pracownik, 
     Kategoria, Podkategoria, Towar, Magazyn, Zamowienie, 
     PozycjaZamowienia, StatusPlatnosci, Platnosc, Atrybut, 
-    WartoscAtrybutu, Opinia, StatusReklamacji, Reklamacja
+    WartoscAtrybutu, Opinia, StatusReklamacji, Reklamacja,
+    HistoriaStatusowZamowienia
 )
 
 # ==========================================
@@ -50,6 +51,13 @@ class PozycjaZamowieniaInline(admin.TabularInline):
 
 class PlatnoscInline(admin.StackedInline):
     model = Platnosc
+    can_delete = False
+
+# NOWE: Wbudowana historia logów statusu
+class HistoriaStatusowInline(admin.TabularInline):
+    model = HistoriaStatusowZamowienia
+    extra = 0
+    readonly_fields = ('data_zmiany', 'nowy_status', 'zmienione_przez', 'stary_status')
     can_delete = False
 
 # ==========================================
@@ -136,7 +144,7 @@ class ZamowienieAdmin(admin.ModelAdmin):
     list_display = ('id', 'klient', 'data_zamowienia', 'status_kolorowy', 'pracownik')
     list_filter = ('status', 'data_zamowienia', 'dostawa')
     search_fields = ('klient__imie', 'klient__nazwisko', 'klient__email', 'id')
-    inlines = [PlatnoscInline, PozycjaZamowieniaInline]
+    inlines = [PlatnoscInline, PozycjaZamowieniaInline, HistoriaStatusowInline]
     date_hierarchy = 'data_zamowienia'
 
     def status_kolorowy(self, obj):
