@@ -66,14 +66,29 @@ class ZamowienieSchema(Schema):
 
 @router.post("/")
 def create_order(request, data: ZamowienieSchema):
-    # 1. Obsługa klienta (Gość lub Zalogowany)
     user = None
+    klient = None
+
+    # --- POPRAWKA: Ręczne odczytywanie tokenu JWT ---
+    # Ponieważ ten endpoint nie wymusza logowania (brak auth=auth), 
+    # Ninja ignoruje token. Odczytujemy go tu ręcznie.
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header.split(" ")[1]
+        if token and token != "null":
+            try:
+                payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+                request.auth = payload
+            except Exception:
+                pass
+
+    # 1. Obsługa klienta (Gość lub Zalogowany)
     if not data.is_guest and getattr(request, 'auth', None):
         try:
             user = User.objects.get(username=request.auth['username'])
             klient = Klient.objects.get(user=user)
         except (User.DoesNotExist, Klient.DoesNotExist):
-            return 401, {"detail": "Nieznany użytkownik."}
+            return 401, {"detail": "Nieznany użytkownik. Zaloguj się ponownie."}
     else:
         if data.create_account and data.haslo:
             if User.objects.filter(username=data.klient.email).exists():
@@ -208,7 +223,6 @@ class UserOrderSchema(Schema):
         try:
             return float(obj.platnosc.kwota)
         except Exception:
-            # W razie braku obiektu płatności (fallback)
             suma = sum(float(p.cena_sprzedazy) * p.ilosc for p in obj.pozycje.all())
             if hasattr(obj, 'dostawa') and obj.dostawa:
                 suma += float(obj.dostawa.cena_dostawy)
@@ -290,6 +304,10 @@ class UserComplaintReplySchema(Schema):
     @staticmethod
     def resolve_wiadomosci(obj):
         return list(obj.wiadomosci.all().order_by('data_wyslania'))
+        
+    @staticmethod
+    def resolve_status(obj):
+        return obj.status.nazwa if hasattr(obj, 'status') and obj.status else "W toku"
 
 @router.get("/reklamacje", response=List[UserComplaintReplySchema], auth=auth)
 def get_user_complaints(request):
@@ -298,7 +316,7 @@ def get_user_complaints(request):
         klient = Klient.objects.get(user__username=request.auth['username'])
         return Reklamacja.objects.filter(
             pozycja__zamowienie__klient=klient
-        ).select_related('pozycja__zamowienie').prefetch_related('wiadomosci').order_by('-data_zgloszenia')
+        ).select_related('pozycja__zamowienie', 'status').prefetch_related('wiadomosci').order_by('-data_zgloszenia')
     except Klient.DoesNotExist:
         return []
 
