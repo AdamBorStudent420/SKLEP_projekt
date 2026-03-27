@@ -16,6 +16,7 @@ from ninja.security import HttpBearer
 from .models import Towar, Klient, Dostawa, Rabat, Kategoria, Magazyn, Atrybut, WartoscAtrybutu, HistoriaStatusowZamowienia, Zamowienie
 
 
+
 # ==========================================
 # JWT – używany do weryfikacji tożsamości
 # ==========================================
@@ -39,7 +40,7 @@ api = NinjaAPI(title="Sklep Komputerowy API", version="1.0.0")
 
 # Podłączamy Twój router zamówień klienta (bez auth=auth, żeby goście mogli kupować!)
 from .orders import router as orders_router
-api.add_router("/zamowienia", orders_router)
+api.add_router("/zamowienia/", orders_router)
 
 # ==========================================
 # SCHEMATY DANYCH

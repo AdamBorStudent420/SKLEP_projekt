@@ -32,6 +32,115 @@ const darkTheme = createTheme({
 
 const API_BASE_URL = 'http://127.0.0.1:8000';
 
+// ==========================================
+// KOMPONENT MENU KONTA
+// ==========================================
+const AccountMenu = ({ userData, onClose, onLogout, onOpenOrders, onOpenProfile }) => {
+  if (!userData) {
+    return null;
+  }
+
+  return (
+    <Paper
+      sx={{
+        position: 'absolute',
+        top: 60,
+        right: 20,
+        width: 280,
+        zIndex: 1300,
+        bgcolor: 'background.paper',
+        borderRadius: 2,
+        boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+        overflow: 'hidden'
+      }}
+    >
+      {/* Nagłówek z danymi użytkownika */}
+      <Box sx={{ 
+        p: 2, 
+        bgcolor: 'background.paper', 
+        color: 'white',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center'
+      }}>
+        <Box>
+          <Typography variant="subtitle2" sx={{ opacity: 0.8 }}>
+            Zalogowany jako
+          </Typography>
+          <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+            {userData?.imie || userData?.first_name || userData?.username}
+          </Typography>
+          <Typography variant="body2" sx={{ opacity: 0.9 }}>
+            {userData?.email}
+          </Typography>
+        </Box>
+        <IconButton size="small" onClick={onClose} sx={{ color: 'white' }}>
+          <X size={18} />
+        </IconButton>
+      </Box>
+
+      {/* Dane szczegółowe */}
+      <Box sx={{ p: 2, borderBottom: '1px solid rgba(0,0,0,0.1)' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+          <User size={16} />
+          <Typography variant="body2">
+            {userData?.imie || '-'} {userData?.nazwisko || ''}
+          </Typography>
+        </Box>
+        {userData?.nr_tel && (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.362 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" />
+            </svg>
+            <Typography variant="body2">{userData.nr_tel}</Typography>
+          </Box>
+        )}
+      </Box>
+
+      {/* Menu akcji */}
+      <Box sx={{ p: 1 }}>
+        <Button
+          fullWidth
+          sx={{ justifyContent: 'flex-start', mb: 0.5, color: 'text.primary' }}
+          startIcon={<ShoppingCart size={18} />}
+          onClick={() => {
+            onClose();
+            onOpenOrders();
+          }}
+        >
+          Moje zamówienia
+        </Button>
+        <Button
+          fullWidth
+          sx={{ justifyContent: 'flex-start', mb: 0.5, color: 'text.primary' }}
+          startIcon={<User size={18} />}
+          onClick={() => {
+            onClose();
+            onOpenProfile();
+          }}
+        >
+          Ustawienia konta
+        </Button>
+        <Divider sx={{ my: 1 }} />
+        <Button
+          fullWidth
+          sx={{ justifyContent: 'flex-start', color: '#dc3545' }}
+          startIcon={<LogOut size={18} />}
+          onClick={() => {
+            onLogout();
+            onClose();
+          }}
+        >
+          Wyloguj się
+        </Button>
+      </Box>
+    </Paper>
+  );
+};
+
+// ==========================================
+// GŁÓWNY KOMPONENT APP
+// ==========================================
 export default function App() {
   const [cart, setCart] = useState([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -82,6 +191,20 @@ export default function App() {
   const [discountApplied, setDiscountApplied] = useState(null);
   const [discountError, setDiscountError] = useState('');
 
+  const [userData, setUserData] = useState(null);
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+
+
+const [isOrdersOpen, setIsOrdersOpen] = useState(false);
+const [isProfileEditOpen, setIsProfileEditOpen] = useState(false);
+const [userOrders, setUserOrders] = useState([]);
+const [editProfileData, setEditProfileData] = useState({
+  imie: '',
+  nazwisko: '',
+  nr_tel: '',
+  email: ''
+});
+
   // 1. Inicjalizacja (Pobieranie równoległe)
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -121,6 +244,42 @@ export default function App() {
     };
     fetchAllData();
   }, []);
+
+  useEffect(() => {
+    const fetchUserData = async () => {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setUser(null);
+        setUserData(null);
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/me`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log('User data fetched:', data);
+          setUserData(data);
+          setUser(prev => prev ? { ...prev, ...data } : { username: data.username, token });
+        } else if (response.status === 401) {
+          localStorage.removeItem('token');
+          localStorage.removeItem('username');
+          setUser(null);
+          setUserData(null);
+        }
+      } catch (error) {
+        console.error('Błąd pobierania danych użytkownika:', error);
+      }
+    };
+
+    fetchUserData();
+  }, [user]);
+
 
   // --- LOGIKA KOSZYKA ---
   const handleAddToCart = (product) => {
@@ -276,7 +435,13 @@ try {
       setIsLoginOpen(false); setLoginData({ username: '', password: '' });
     } catch (err) { setLoginError(err.message); }
   };
-  const handleLogout = () => { localStorage.removeItem('token'); localStorage.removeItem('username'); setUser(null); };
+    const handleLogout = () => { 
+    localStorage.removeItem('token'); 
+    localStorage.removeItem('username'); 
+    setUser(null);
+    setUserData(null);
+    setIsAccountMenuOpen(false);
+  };
 
   const handleRegisterChange = (e) => setRegisterData({ ...registerData, [e.target.name]: e.target.value });
   const handleRegisterSubmit = async () => {
@@ -295,6 +460,70 @@ try {
     } catch (err) { setRegisterError(err.message); }
   };
   const openRegister = () => { setIsLoginOpen(false); setIsRegisterOpen(true); };
+
+// Funkcja do pobierania zamówień użytkownika
+  const fetchUserOrders = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/zamowienia/`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const orders = await response.json();
+        setUserOrders(orders);
+      }
+    } catch (error) {
+      console.error('Błąd pobierania zamówień:', error);
+    }
+  };
+
+  // Funkcja do otwierania zamówień
+  const handleOpenOrders = () => {
+    fetchUserOrders();
+    setIsOrdersOpen(true);
+  };
+
+  // Funkcja do otwierania edycji profilu
+  const handleOpenProfile = () => {
+    setEditProfileData({
+      imie: userData?.imie || '',
+      nazwisko: userData?.nazwisko || '',
+      nr_tel: userData?.nr_tel || '',
+      email: userData?.email || '',
+    });
+    setIsProfileEditOpen(true);
+  };
+
+  // Funkcja do zapisywania zmian profilu
+  const handleSaveProfile = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/me`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify(editProfileData),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setUserData(result.user);
+        alert('Dane zostały zaktualizowane!');
+        setIsProfileEditOpen(false);
+      } else {
+        alert('Błąd podczas aktualizacji danych');
+      }
+    } catch (error) {
+      console.error('Błąd:', error);
+      alert('Nie udało się zaktualizować danych');
+    }
+  };
 
   const getImageUrl = (imagePath) => {
     if (!imagePath) return "https://via.placeholder.com/400x200?text=Brak+zdj%C4%99cia";
@@ -346,106 +575,151 @@ try {
     <ThemeProvider theme={darkTheme}>
       <CssBaseline />
 
-      {/* --- PASEK NAWIGACJI --- */}
-      <AppBar position="sticky" elevation={0} sx={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-        <Container sx={{ px: { xs: 2, sm: 4 }, width: { xs: '100%', md: '85%', lg: '80%', xl: '75%' }, margin: '0 auto', maxWidth: 'none' }}>
-          <Toolbar disableGutters>
-            <Cpu color="#ffffffff" size={28} style={{ marginRight: '12px' }} />
-            <Typography
-              variant="h6"
-              component="div"
-              sx={{ letterSpacing: 1, cursor: 'pointer', display: { xs: 'none', md: 'block' }, mr: { xs: 2, md: 4 } }}
-              onClick={() => { setSelectedCategoryId(null); setSelectedSubcategoryId(null); setSelectedProduct(null); setSearchQuery(''); }}
-            >
-              SKLEP<span style={{ color: '#ffffffff' }}> KOMPUTEROWY</span>
-            </Typography>
+      
+{/* --- PASEK NAWIGACJI --- */}
+<AppBar position="sticky" elevation={0} sx={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+  <Container sx={{ px: { xs: 2, sm: 4 }, width: { xs: '100%', md: '85%', lg: '80%', xl: '75%' }, margin: '0 auto', maxWidth: 'none' }}>
+    <Toolbar disableGutters>
+      <Cpu color="#ffffffff" size={28} style={{ marginRight: '12px' }} />
+      <Typography
+        variant="h6"
+        component="div"
+        sx={{ letterSpacing: 1, cursor: 'pointer', display: { xs: 'none', md: 'block' }, mr: { xs: 2, md: 4 } }}
+        onClick={() => { setSelectedCategoryId(null); setSelectedSubcategoryId(null); setSelectedProduct(null); setSearchQuery(''); }}
+      >
+        SKLEP<span style={{ color: '#ffffffff' }}> KOMPUTEROWY</span>
+      </Typography>
 
-            {/* POLE WYSZUKIWANIA */}
-            <Box sx={{ position: 'relative', width: { xs: '100%', sm: 300, lg: 400 }, mr: 'auto' }}>
-              <TextField
-                size="small"
-                fullWidth
-                placeholder="Szukaj produktu..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                sx={{
-                  bgcolor: '#ffffff',
-                  borderRadius: 2,
-                  '& .MuiOutlinedInput-root': {
-                    color: '#000000',
-                    '& fieldset': { border: 'none' },
-                    '&:hover fieldset': { border: '1px solid rgba(0,0,0,0.3)' },
-                    '&.Mui-focused fieldset': { border: '1px solid #1976d2' }
-                  }
-                }}
-                InputProps={{
-                  startAdornment: <Search size={18} style={{ marginRight: 8, color: 'rgba(0,0,0,0.5)' }} />,
-                }}
-              />
-              {/* WYNIKI WYSZUKIWANIA (DROPDOWN) */}
-              {searchQuery.trim() !== '' && (
-                <Paper
-                  elevation={6}
-                  sx={{
-                    position: 'absolute', top: '100%', left: 0, right: 0, mt: 1,
-                    maxHeight: 400, overflowY: 'auto', zIndex: 9999,
-                    bgcolor: 'background.paper', borderRadius: 2,
-                    border: '1px solid rgba(255,255,255,0.1)'
-                  }}
-                >
-                  {products.filter(p => p.nazwa.toLowerCase().includes(searchQuery.toLowerCase())).length > 0 ? (
-                    <Box component="ul" sx={{ listStyle: 'none', m: 0, p: 1 }}>
-                      {products.filter(p => p.nazwa.toLowerCase().includes(searchQuery.toLowerCase())).map(product => (
-                        <Box component="li" key={product.id}
-                          sx={{
-                            display: 'flex', alignItems: 'center', gap: 2, p: 1,
-                            cursor: 'pointer', borderRadius: 1,
-                            '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' }
-                          }}
-                          onClick={() => {
-                            setSelectedProduct(product);
-                            setSearchQuery('');
-                            window.scrollTo({ top: 0, behavior: 'smooth' });
-                          }}
-                        >
-                          <Box component="img" src={getImageUrl(product.zdjecie)} sx={{ width: 40, height: 40, objectFit: 'contain', bgcolor: 'white', borderRadius: 1 }} />
-                          <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                            <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{product.nazwa}</Typography>
-                            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', lineHeight: 1 }}>{product.kategoria}</Typography>
-                          </Box>
-                          <Typography variant="body2" color="primary.main" sx={{ fontWeight: 'bold', whiteSpace: 'nowrap' }}>
-                            {(product.cena_promocyjna || product.cena_jednostkowa).toFixed(2)} zł
-                          </Typography>
-                        </Box>
-                      ))}
+      {/* POLE WYSZUKIWANIA */}
+      <Box sx={{ position: 'relative', width: { xs: '100%', sm: 300, lg: 400 }, mr: 'auto' }}>
+        <TextField
+          size="small"
+          fullWidth
+          placeholder="Szukaj produktu..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          sx={{
+            bgcolor: '#ffffff',
+            borderRadius: 2,
+            '& .MuiOutlinedInput-root': {
+              color: '#000000',
+              '& fieldset': { border: 'none' },
+              '&:hover fieldset': { border: '1px solid rgba(0,0,0,0.3)' },
+              '&.Mui-focused fieldset': { border: '1px solid #1976d2' }
+            }
+          }}
+          InputProps={{
+            startAdornment: <Search size={18} style={{ marginRight: 8, color: 'rgba(0,0,0,0.5)' }} />,
+          }}
+        />
+        {/* WYNIKI WYSZUKIWANIA (DROPDOWN) */}
+        {searchQuery.trim() !== '' && (
+          <Paper
+            elevation={6}
+            sx={{
+              position: 'absolute', top: '100%', left: 0, right: 0, mt: 1,
+              maxHeight: 400, overflowY: 'auto', zIndex: 9999,
+              bgcolor: 'background.paper', borderRadius: 2,
+              border: '1px solid rgba(255,255,255,0.1)'
+            }}
+          >
+            {products.filter(p => p.nazwa.toLowerCase().includes(searchQuery.toLowerCase())).length > 0 ? (
+              <Box component="ul" sx={{ listStyle: 'none', m: 0, p: 1 }}>
+                {products.filter(p => p.nazwa.toLowerCase().includes(searchQuery.toLowerCase())).map(product => (
+                  <Box component="li" key={product.id}
+                    sx={{
+                      display: 'flex', alignItems: 'center', gap: 2, p: 1,
+                      cursor: 'pointer', borderRadius: 1,
+                      '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' }
+                    }}
+                    onClick={() => {
+                      setSelectedProduct(product);
+                      setSearchQuery('');
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                  >
+                    <Box component="img" src={getImageUrl(product.zdjecie)} sx={{ width: 40, height: 40, objectFit: 'contain', bgcolor: 'white', borderRadius: 1 }} />
+                    <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{product.nazwa}</Typography>
+                      <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', lineHeight: 1 }}>{product.kategoria}</Typography>
                     </Box>
-                  ) : (
-                    <Box sx={{ p: 2, textAlign: 'center' }}>
-                      <Typography variant="body2" color="text.secondary">Brak wyników</Typography>
-                    </Box>
-                  )}
-                </Paper>
-              )}
-            </Box>
-
-            {/* PRAWA STRONA */}
-            {user ? (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mr: 2 }}>
-                <Typography variant="body1" sx={{ color: 'text.secondary', display: { xs: 'none', sm: 'block' } }}>
-                  Witaj, <span style={{ color: '#fff', fontWeight: 'bold' }}>{user.username}</span>
-                </Typography>
-                <IconButton color="inherit" onClick={handleLogout} title="Wyloguj się"><LogOut size={20} /></IconButton>
+                    <Typography variant="body2" color="primary.main" sx={{ fontWeight: 'bold', whiteSpace: 'nowrap' }}>
+                      {(product.cena_promocyjna || product.cena_jednostkowa).toFixed(2)} zł
+                    </Typography>
+                  </Box>
+                ))}
               </Box>
             ) : (
-              <Button color="inherit" startIcon={<User size={20} />} onClick={() => setIsLoginOpen(true)} sx={{ mr: 2 }}>Zaloguj</Button>
+              <Box sx={{ p: 2, textAlign: 'center' }}>
+                <Typography variant="body2" color="text.secondary">Brak wyników</Typography>
+              </Box>
             )}
-            <IconButton color="inherit" onClick={toggleCart} sx={{ ml: 2 }}>
-              <Badge badgeContent={cartItemsCount} color="primary"><ShoppingCart /></Badge>
-            </IconButton>
-          </Toolbar>
-        </Container>
-      </AppBar>
+          </Paper>
+        )}
+      </Box>
 
+      {/* PRAWA STRONA */}
+{user ? (
+  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mr: 2, position: 'relative' }}>
+    <Box
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1,
+        cursor: 'pointer',
+        p: 1,
+        borderRadius: 2,
+        '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' }
+      }}
+      onClick={() => setIsAccountMenuOpen(!isAccountMenuOpen)}
+    >
+      <Box
+        sx={{
+          width: 36,
+          height: 36,
+          borderRadius: '50%',
+          bgcolor: '#1976d2',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: 'white',
+          fontWeight: 'bold'
+        }}
+      >
+        {userData?.imie ? userData.imie[0].toUpperCase() : user.username[0].toUpperCase()}
+      </Box>
+      <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
+        <Typography variant="body2" sx={{ color: 'text.secondary', lineHeight: 1 }}>
+          Witaj,
+        </Typography>
+        <Typography variant="body1" sx={{ fontWeight: 'bold', lineHeight: 1 }}>
+          {userData?.imie || userData?.first_name || user.username}
+        </Typography>
+      </Box>
+    </Box>
+
+    {/* Menu konta - TO JEST POPRAWNE MIEJSCE */}
+    {isAccountMenuOpen && (
+      <AccountMenu
+        userData={userData}
+        onClose={() => setIsAccountMenuOpen(false)}
+        onLogout={handleLogout}
+        onOpenOrders={handleOpenOrders}
+        onOpenProfile={handleOpenProfile}
+      />
+    )}
+  </Box>
+) : (
+  <Button color="inherit" startIcon={<User size={20} />} onClick={() => setIsLoginOpen(true)} sx={{ mr: 2 }}>
+    Zaloguj
+  </Button>
+)}
+      <IconButton color="inherit" onClick={toggleCart} sx={{ ml: 2 }}>
+        <Badge badgeContent={cartItemsCount} color="primary"><ShoppingCart /></Badge>
+      </IconButton>
+    </Toolbar>
+  </Container>
+</AppBar>
       {/* --- GŁÓWNA ZAWARTOŚĆ --- */}
       <Container sx={{ py: 6, px: { xs: 2, sm: 4 }, width: { xs: '100%', md: '85%', lg: '80%', xl: '75%' }, margin: '0 auto', maxWidth: 'none' }}>
         {loading && <Box sx={{ display: 'flex', justifyContent: 'center', my: 8 }}><CircularProgress color="primary" /></Box>}
@@ -1020,6 +1294,172 @@ try {
           <Button onClick={handleRegisterSubmit} variant="contained" color="primary">Załóż konto</Button>
         </DialogActions>
       </Dialog>
+
+  {/* --- MODAL ZAMÓWIEŃ --- */}
+      <Dialog open={isOrdersOpen} onClose={() => setIsOrdersOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ 
+          fontWeight: 'bold', 
+          bgcolor: '#1976d2',
+          color: 'white',
+          borderBottom: '1px solid rgba(255,255,255,0.1)'
+        }}>
+          Moje zamówienia
+        </DialogTitle>
+        <DialogContent sx={{ p: 3, bgcolor: '#f5f5f5' }}>
+          {userOrders.length === 0 ? (
+            <Box sx={{ textAlign: 'center', py: 4 }}>
+              <Typography variant="body1" sx={{ color: '#000000' }}>
+                Nie masz jeszcze żadnych zamówień.
+              </Typography>
+              <Button 
+                variant="contained" 
+                sx={{ mt: 2, bgcolor: '#1976d2' }}
+                onClick={() => setIsOrdersOpen(false)}
+              >
+                Rozpocznij zakupy
+              </Button>
+            </Box>
+          ) : (
+            userOrders.map((order) => (
+              <Paper key={order.id} sx={{ mb: 2, p: 2, bgcolor: '#ffffff', borderRadius: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                  <Typography variant="subtitle1" fontWeight="bold" sx={{ color: '#1976d2' }}>
+                    Zamówienie #{order.id}
+                  </Typography>
+                  <Chip 
+                    label={order.status} 
+                    sx={{
+                      bgcolor: order.status === 'dostarczone' ? '#4caf50' : 
+                               order.status === 'anulowane' ? '#f44336' : '#1976d2',
+                      color: 'white',
+                      fontWeight: 'bold'
+                    }}
+                    size="small"
+                  />
+                </Box>
+                <Typography variant="body2" sx={{ color: '#666666' }}>
+                  Data: {new Date(order.data_utworzenia).toLocaleDateString('pl-PL')}
+                </Typography>
+                <Typography variant="body2" fontWeight="bold" sx={{ mt: 1, color: '#000000' }}>
+                  Kwota: {order.suma} zł
+                </Typography>
+                <Button 
+                  size="small" 
+                  sx={{ mt: 1, color: '#1976d2' }}
+                  onClick={() => console.log('Szczegóły zamówienia:', order)}
+                >
+                  Zobacz szczegóły
+                </Button>
+              </Paper>
+            ))
+          )}
+        </DialogContent>
+        <DialogActions sx={{ bgcolor: '#ffffff', borderTop: '1px solid #e0e0e0' }}>
+          <Button onClick={() => setIsOrdersOpen(false)} sx={{ color: '#1976d2' }}>
+            Zamknij
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* --- MODAL EDYCJI PROFILU --- */}
+      <Dialog open={isProfileEditOpen} onClose={() => setIsProfileEditOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ 
+          fontWeight: 'bold', 
+          bgcolor: '#1976d2',
+          color: 'white',
+          borderBottom: '1px solid rgba(255,255,255,0.1)'
+        }}>
+          Ustawienia konta
+        </DialogTitle>
+        <DialogContent sx={{ p: 3, bgcolor: '#f5f5f5' }}>
+          <TextField
+            label="Imię"
+            fullWidth
+            margin="normal"
+            value={editProfileData.imie || ''}
+            onChange={(e) => setEditProfileData({ ...editProfileData, imie: e.target.value })}
+            sx={{
+              '& .MuiInputLabel-root': { color: 'rgba(0, 0, 0, 0.7)' },
+              '& .MuiInputLabel-root.Mui-focused': { color: '#1976d2' },
+              '& .MuiOutlinedInput-root': {
+                color: '#000000',
+                backgroundColor: '#ffffff',
+                '& fieldset': { borderColor: 'rgba(0, 0, 0, 0.23)' },
+                '&:hover fieldset': { borderColor: '#1976d2' },
+                '&.Mui-focused fieldset': { borderColor: '#1976d2' }
+              }
+            }}
+          />
+          <TextField
+            label="Nazwisko"
+            fullWidth
+            margin="normal"
+            value={editProfileData.nazwisko || ''}
+            onChange={(e) => setEditProfileData({ ...editProfileData, nazwisko: e.target.value })}
+            sx={{
+              '& .MuiInputLabel-root': { color: 'rgba(0, 0, 0, 0.7)' },
+              '& .MuiInputLabel-root.Mui-focused': { color: '#1976d2' },
+              '& .MuiOutlinedInput-root': {
+                color: '#000000',
+                backgroundColor: '#ffffff',
+                '& fieldset': { borderColor: 'rgba(0, 0, 0, 0.23)' },
+                '&:hover fieldset': { borderColor: '#1976d2' },
+                '&.Mui-focused fieldset': { borderColor: '#1976d2' }
+              }
+            }}
+          />
+          <TextField
+            label="Email"
+            type="email"
+            fullWidth
+            margin="normal"
+            value={editProfileData.email || ''}
+            onChange={(e) => setEditProfileData({ ...editProfileData, email: e.target.value })}
+            sx={{
+              '& .MuiInputLabel-root': { color: 'rgba(0, 0, 0, 0.7)' },
+              '& .MuiInputLabel-root.Mui-focused': { color: '#1976d2' },
+              '& .MuiOutlinedInput-root': {
+                color: '#000000',
+                backgroundColor: '#ffffff',
+                '& fieldset': { borderColor: 'rgba(0, 0, 0, 0.23)' },
+                '&:hover fieldset': { borderColor: '#1976d2' },
+                '&.Mui-focused fieldset': { borderColor: '#1976d2' }
+              }
+            }}
+          />
+          <TextField
+            label="Numer telefonu"
+            fullWidth
+            margin="normal"
+            value={editProfileData.nr_tel || ''}
+            onChange={(e) => setEditProfileData({ ...editProfileData, nr_tel: e.target.value })}
+            sx={{
+              '& .MuiInputLabel-root': { color: 'rgba(0, 0, 0, 0.7)' },
+              '& .MuiInputLabel-root.Mui-focused': { color: '#1976d2' },
+              '& .MuiOutlinedInput-root': {
+                color: '#000000',
+                backgroundColor: '#ffffff',
+                '& fieldset': { borderColor: 'rgba(0, 0, 0, 0.23)' },
+                '&:hover fieldset': { borderColor: '#1976d2' },
+                '&.Mui-focused fieldset': { borderColor: '#1976d2' }
+              }
+            }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ bgcolor: '#ffffff', borderTop: '1px solid #e0e0e0' }}>
+          <Button onClick={() => setIsProfileEditOpen(false)} sx={{ color: '#666666' }}>
+            Anuluj
+          </Button>
+          <Button 
+            variant="contained" 
+            onClick={handleSaveProfile}
+            sx={{ bgcolor: '#1976d2', '&:hover': { bgcolor: '#1565c0' } }}
+          >
+            Zapisz zmiany
+          </Button>
+        </DialogActions>
+      </Dialog>
+
     </ThemeProvider>
   );
 }
