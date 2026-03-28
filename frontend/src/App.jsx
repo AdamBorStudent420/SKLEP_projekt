@@ -1242,7 +1242,7 @@ export default function App() {
                       <Button fullWidth variant={selectedSubcategoryId === null ? 'contained' : 'text'} color="primary"
                         sx={{ justifyContent: 'flex-start', alignItems: 'flex-start', textAlign: 'left', mb: 0.5 }}
                         onClick={() => setSelectedSubcategoryId(null)}>
-                        Wszystkie modele
+                        Pokaż wszystko
                       </Button>
                       {categories.find(c => c.id === selectedCategoryId)?.podkategorie.map(sub => (
                         <Button key={sub.id} fullWidth variant={selectedSubcategoryId === sub.id ? 'contained' : 'text'} color="secondary"

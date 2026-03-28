@@ -127,7 +127,8 @@ const NativeWysiwyg = ({ value, onChange }) => {
             fontSize: '16px',
             textAlign: 'left',
             '& ul, & ol': { pl: 3, my: 1 },
-            '& a': { color: '#3b82f6', textDecoration: 'underline' }
+            '& a': { color: '#3b82f6', textDecoration: 'underline' },
+            wordBreak: 'break-word'
           }}
         />
       )}
@@ -201,7 +202,6 @@ export default function AdminApp() {
   const [newAttrValue, setNewAttrValue] = useState('');
   const [newAttrTargetIndex, setNewAttrTargetIndex] = useState(null);
 
-  // --- DODANO: Stany usuwania produktu ---
   const [deleteProductDialogOpen, setDeleteProductDialogOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState(null);
 
@@ -253,7 +253,6 @@ export default function AdminApp() {
     }
   }, [productForm.podkategoria_id, activeView]);
 
-  // Utrzymywanie zsynchronizowanego czatu & odhaczanie nowej wiadomości
   useEffect(() => {
     if (activeView === 'COMPLAINT_DETAILS' && selectedComplaint) {
       const comp = complaints.find(c => c.id === selectedComplaint.id);
@@ -331,7 +330,6 @@ export default function AdminApp() {
     } catch (err) { setCustomersError(err.message); } finally { setLoadingCustomers(false); }
   };
 
-  // Pobieranie Opinii
   const fetchReviews = async () => {
     setLoadingReviews(true);
     try {
@@ -345,7 +343,6 @@ export default function AdminApp() {
     } catch (err) { console.error(err); } finally { setLoadingReviews(false); }
   };
 
-  // --- REKLAMACJE POBIERANIE CZATU I STATUSÓW ---
   const fetchComplaints = async () => {
     setLoadingComplaints(true);
     try {
@@ -366,7 +363,6 @@ export default function AdminApp() {
     } catch (err) { console.error(err); }
   };
 
-  // Zmiana statusu reklamacji
   const handleStatusChange = async (complaintId, newStatusId) => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/admin/reklamacje/${complaintId}/status`, {
@@ -377,7 +373,7 @@ export default function AdminApp() {
       if (!res.ok) throw new Error("Błąd zmiany statusu.");
       const data = await res.json();
       setSnackbar({ open: true, message: `Status pomyślnie zmieniony na: ${data.nowy_status}`, severity: 'success' });
-      fetchComplaints(); // Pobierz świeżą listę, zaktualizuje to też otwarty modal
+      fetchComplaints();
     } catch (err) {
       setSnackbar({ open: true, message: err.message, severity: 'error' });
     }
@@ -442,7 +438,6 @@ export default function AdminApp() {
     } catch (e) { alert(e.message); }
   };
 
-  // Zapisywanie Odpowiedzi Sklepu
   const handleSaveReply = async () => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/admin/opinie/${selectedReview.id}/odpowiedz`, {
@@ -459,7 +454,6 @@ export default function AdminApp() {
     }
   };
 
-  // ZAPISYWANIE ODPOWIEDZI NA REKLAMACJĘ (WYSYŁANIE WIADOMOŚCI PRZEZ ADMINA)
   const handleSaveComplaintReply = async () => {
     if (!complaintReplyText.trim()) return;
     try {
@@ -618,9 +612,8 @@ export default function AdminApp() {
     }
   };
 
-  // --- DODANO: Funkcje usuwania produktu ---
   const handleDeleteProductClick = (e, product) => {
-    e.stopPropagation(); // Zapobiega otwarciu okna edycji
+    e.stopPropagation();
     setProductToDelete(product);
     setDeleteProductDialogOpen(true);
   };
@@ -639,7 +632,7 @@ export default function AdminApp() {
       setSnackbar({ open: true, message: `Produkt "${productToDelete.nazwa}" został usunięty.`, severity: 'success' });
       setDeleteProductDialogOpen(false);
       setProductToDelete(null);
-      fetchProducts(); // Zaktualizowanie listy towarów
+      fetchProducts();
     } catch (err) {
       setSnackbar({ open: true, message: err.message, severity: 'error' });
     }
@@ -654,13 +647,12 @@ export default function AdminApp() {
     return map[status] || { color: 'default', label: status };
   };
 
-  // Bardzo precyzyjne zliczanie NOWYCH i NIEPRZECZYTANYCH wiadomości
   const pendingComplaintsCount = complaints.filter(c => {
-    if (!c.wiadomosci || c.wiadomosci.length === 0) return true; // Zupełnie nowe zgłoszenie
+    if (!c.wiadomosci || c.wiadomosci.length === 0) return true;
     const lastMsg = c.wiadomosci[c.wiadomosci.length - 1];
     if (lastMsg.autor === 'KLIENT') {
       const viewedCount = viewedComplaints[c.id] || 0;
-      if (viewedCount < c.wiadomosci.length) return true; // Klient napisał coś nowego, czego nie widzieliśmy
+      if (viewedCount < c.wiadomosci.length) return true;
     }
     return false;
   }).length;
@@ -668,9 +660,9 @@ export default function AdminApp() {
   // --- KOMPONENTY WIDOKÓW ---
   const renderDashboard = () => (
     <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', pt: 4 }}>
-      <Typography variant="h3" fontWeight="bold" sx={{ mb: 1, textAlign: 'center' }}>Witaj w Panelu, {user?.username}!</Typography>
-      <Typography variant="subtitle1" color="text.secondary" sx={{ mb: 6, textAlign: 'center' }}>Wybierz moduł, którym chcesz zarządzać, korzystając z poniższych skrótów:</Typography>
-      <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 4, justifyContent: 'center', maxWidth: 1200, width: '100%', mx: 'auto', px: 2, flexWrap: 'wrap' }}>
+      <Typography variant="h3" fontWeight="bold" sx={{ mb: 1, textAlign: 'center', fontSize: { xs: '2rem', sm: '3rem' } }}>Witaj w Panelu, {user?.username}!</Typography>
+      <Typography variant="subtitle1" color="text.secondary" sx={{ mb: 6, textAlign: 'center', px: 2 }}>Wybierz moduł, którym chcesz zarządzać, korzystając z poniższych skrótów:</Typography>
+      <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: { xs: 2, sm: 4 }, justifyContent: 'center', maxWidth: 1200, width: '100%', mx: 'auto', flexWrap: 'wrap' }}>
         {[
           { id: 'ORDERS', title: 'Zamówienia', desc: 'Przeglądaj i realizuj zamówienia', icon: <ShoppingBag size={40} color="#fff" />, bg: '#3b82f6' },
           { id: 'PRODUCTS', title: 'Towary', desc: 'Zarządzaj asortymentem', icon: <Package size={40} color="#fff" />, bg: '#10b981' },
@@ -681,10 +673,10 @@ export default function AdminApp() {
             title: 'Reklamacje',
             desc: pendingComplaintsCount > 0 ? `${pendingComplaintsCount} wiadomość(i) czeka na Ciebie!` : 'Wszystko odczytane',
             icon: <Badge badgeContent={pendingComplaintsCount} color="error"><AlertTriangle size={40} color="#fff" /></Badge>,
-            bg: '#ef4444'
+            bg: '#f46c6cff'
           },
         ].map((tile) => (
-          <Card key={tile.id} sx={{ minWidth: 220, flex: 1, bgcolor: tile.bg, display: 'flex', flexDirection: 'column', cursor: 'pointer', transition: 'transform 0.2s, box-shadow 0.2s', '&:hover': { transform: 'translateY(-8px)', boxShadow: '0 12px 24px rgba(0,0,0,0.3)' } }} onClick={() => setActiveView(tile.id)}>
+          <Card key={tile.id} sx={{ minWidth: { xs: '100%', sm: 220 }, flex: 1, bgcolor: tile.bg, display: 'flex', flexDirection: 'column', cursor: 'pointer', transition: 'transform 0.2s, box-shadow 0.2s', '&:hover': { transform: 'translateY(-8px)', boxShadow: '0 12px 24px rgba(0,0,0,0.3)' } }} onClick={() => setActiveView(tile.id)}>
             <CardContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', p: 3, flexGrow: 1 }}>
               <Box sx={{ p: 1.5, bgcolor: 'rgba(255,255,255,0.2)', borderRadius: '50%', mb: 2 }}>{tile.icon}</Box>
               <Typography variant="h6" color="white" fontWeight="bold" gutterBottom>{tile.title}</Typography>
@@ -715,7 +707,7 @@ export default function AdminApp() {
           </Box>
         </Box>
         {ordersError && <Alert severity="error" sx={{ mb: 3 }}>{ordersError}</Alert>}
-        <TableContainer component={Paper} sx={{ borderRadius: 2, width: '100%' }}>
+        <TableContainer component={Paper} sx={{ borderRadius: 2, width: '100%', overflowX: 'auto' }}>
           {loadingOrders ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', p: 5 }}><CircularProgress /></Box>
           ) : (
@@ -764,7 +756,7 @@ export default function AdminApp() {
         <Button startIcon={<ArrowLeft size={20} />} onClick={() => { setSelectedOrder(null); setActiveView('ORDERS'); }} sx={{ mb: 3, color: 'text.secondary' }}>Wróć do listy zamówień</Button>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 4, flexWrap: 'wrap', gap: 2 }}>
           <Typography variant="h4" fontWeight="bold">Zamówienie #{order.id}</Typography>
-          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
             <Chip label={`Status: ${statusInfo.label}`} color={statusInfo.color} sx={{ fontWeight: 'bold', px: 1, fontSize: '1rem', height: 36 }} />
             {(order.status === 'NOWE' || order.status === 'OPLACONE') && (
               <Button variant="contained" color="primary" size="large" startIcon={<Play size={18} />} onClick={() => updateOrderStatus(order.id, 'W_REALIZACJI')}>Pobierz do realizacji</Button>
@@ -778,7 +770,7 @@ export default function AdminApp() {
           <Grid item xs={12} md={8}>
             <Paper sx={{ p: 3, mb: 4, borderRadius: 2 }}>
               <Typography variant="h6" sx={{ mb: 2, pb: 1, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>Lista produktów do spakowania</Typography>
-              <TableContainer>
+              <TableContainer sx={{ overflowX: 'auto' }}>
                 <Table size="small">
                   <TableHead>
                     <TableRow><TableCell sx={{ color: 'text.secondary' }}>Produkt</TableCell><TableCell align="center" sx={{ color: 'text.secondary' }}>Ilość</TableCell><TableCell align="right" sx={{ color: 'text.secondary' }}>Cena jedn.</TableCell><TableCell align="right" sx={{ color: 'text.secondary' }}>Suma</TableCell></TableRow>
@@ -807,7 +799,7 @@ export default function AdminApp() {
                   {history.map((h, idx) => (
                     <ListItem key={idx} sx={{ px: 0, py: 1, borderBottom: idx !== history.length - 1 ? '1px dashed rgba(255,255,255,0.1)' : 'none' }}>
                       <ListItemText
-                        primary={<Box display="flex" justifyContent="space-between"><Typography variant="body1" fontWeight="bold">{getStatusProps(h.nowy_status).label}</Typography><Typography variant="caption" color="text.secondary">{new Date(h.data_zmiany).toLocaleString('pl-PL')}</Typography></Box>}
+                        primary={<Box display="flex" justifyContent="space-between" flexWrap="wrap"><Typography variant="body1" fontWeight="bold">{getStatusProps(h.nowy_status).label}</Typography><Typography variant="caption" color="text.secondary">{new Date(h.data_zmiany).toLocaleString('pl-PL')}</Typography></Box>}
                         secondary={`Zmienione przez: ${h.zmienione_przez}`}
                       />
                     </ListItem>
@@ -829,7 +821,7 @@ export default function AdminApp() {
               <Typography variant="caption" color="text.secondary" fontWeight="bold">METODA PŁATNOŚCI</Typography><Typography variant="body1" sx={{ mb: 2 }}>{paymentMethod}</Typography>
 
               <Typography variant="caption" color="text.secondary" fontWeight="bold">STATUS PŁATNOŚCI</Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2, flexWrap: 'wrap' }}>
                 <Typography variant="body1" color={!order.status_platnosci || order.status_platnosci === 'Brak płatności' ? 'error.light' : order.status_platnosci === 'Zakończona' ? 'success.light' : 'warning.light'} fontWeight="bold">
                   {order.status_platnosci || 'Brak płatności'}
                 </Typography>
@@ -877,7 +869,7 @@ export default function AdminApp() {
 
         {customersError && <Alert severity="error" sx={{ mb: 3 }}>{customersError}</Alert>}
 
-        <TableContainer component={Paper} sx={{ borderRadius: 2, width: '100%' }}>
+        <TableContainer component={Paper} sx={{ borderRadius: 2, width: '100%', overflowX: 'auto' }}>
           {loadingCustomers ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', p: 5 }}><CircularProgress /></Box>
           ) : (
@@ -964,7 +956,7 @@ export default function AdminApp() {
               <Typography variant="h6" sx={{ mb: 3, pb: 1, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
                 Historia Zamówień ({c.liczba_zamowien})
               </Typography>
-              <TableContainer>
+              <TableContainer sx={{ overflowX: 'auto' }}>
                 <Table size="small">
                   <TableHead>
                     <TableRow>
@@ -1031,7 +1023,7 @@ export default function AdminApp() {
         {!showAllProducts && !selectedListSubcategory && !searchQuery ? (
           <Alert severity="info" sx={{ borderRadius: 2, fontSize: '1rem', py: 2 }}>Wybierz kategorię i podkategorię powyżej lub kliknij "Pokaż wszystko", aby wyświetlić towary.</Alert>
         ) : (
-          <TableContainer component={Paper} sx={{ borderRadius: 2, width: '100%' }}>
+          <TableContainer component={Paper} sx={{ borderRadius: 2, width: '100%', overflowX: 'auto' }}>
             {loadingProducts ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', p: 5 }}><CircularProgress /></Box>
             ) : (
@@ -1199,13 +1191,11 @@ export default function AdminApp() {
           </Alert>
         ) : (
           <Box>
-            {productForm.atrybuty.length > 0 && (
-              <Box sx={{ display: 'flex', gap: 2, mb: 1, px: 1 }}>
-                <Typography variant="caption" color="text.secondary" fontWeight="bold" sx={{ flex: 1 }}>ATRYBUT</Typography>
-                <Typography variant="caption" color="text.secondary" fontWeight="bold" sx={{ flex: 1 }}>WARTOŚĆ</Typography>
-                <Box sx={{ width: 40 }} />
-              </Box>
-            )}
+            <Box sx={{ display: { xs: 'none', sm: 'flex' }, gap: 2, mb: 1, px: 1 }}>
+              <Typography variant="caption" color="text.secondary" fontWeight="bold" sx={{ flex: 1 }}>ATRYBUT</Typography>
+              <Typography variant="caption" color="text.secondary" fontWeight="bold" sx={{ flex: 1 }}>WARTOŚĆ</Typography>
+              <Box sx={{ width: 40 }} />
+            </Box>
 
             {productForm.atrybuty.length === 0 && (
               <Typography color="text.secondary" sx={{ fontStyle: 'italic', py: 2, px: 1 }}>
@@ -1218,8 +1208,8 @@ export default function AdminApp() {
               const suggestedValues = selectedAttrTemplate?.wartosci || [];
 
               return (
-                <Box key={index} sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2, width: '100%' }}>
-                  <Box sx={{ display: 'flex', flex: 1, gap: 1 }}>
+                <Box key={index} sx={{ display: 'flex', gap: 2, alignItems: { xs: 'flex-start', sm: 'center' }, flexDirection: { xs: 'column', sm: 'row' }, mb: 2, width: '100%' }}>
+                  <Box sx={{ display: 'flex', flex: 1, gap: 1, width: '100%' }}>
                     <Autocomplete
                       freeSolo
                       options={availableAttributes.map((option) => option.nazwa)}
@@ -1241,18 +1231,19 @@ export default function AdminApp() {
                     </IconButton>
                   </Box>
 
-                  <Autocomplete
-                    freeSolo
-                    options={suggestedValues}
-                    value={attr.wartosc}
-                    onInputChange={(event, newInputValue) => updateAttribute(index, 'wartosc', newInputValue)}
-                    sx={{ flex: 1 }}
-                    renderInput={(params) => <TextField {...params} label="Wybierz lub wpisz wartość" placeholder="np. 16 GB" />}
-                  />
-
-                  <IconButton color="error" onClick={() => removeAttribute(index)} sx={{ width: 40, height: 40 }}>
-                    <Trash2 size={24} />
-                  </IconButton>
+                  <Box sx={{ display: 'flex', flex: 1, gap: 2, width: '100%', alignItems: 'center' }}>
+                    <Autocomplete
+                      freeSolo
+                      options={suggestedValues}
+                      value={attr.wartosc}
+                      onInputChange={(event, newInputValue) => updateAttribute(index, 'wartosc', newInputValue)}
+                      sx={{ flex: 1 }}
+                      renderInput={(params) => <TextField {...params} label="Wybierz lub wpisz wartość" placeholder="np. 16 GB" />}
+                    />
+                    <IconButton color="error" onClick={() => removeAttribute(index)} sx={{ width: 40, height: 40, flexShrink: 0 }}>
+                      <Trash2 size={24} />
+                    </IconButton>
+                  </Box>
                 </Box>
               );
             })}
@@ -1266,7 +1257,7 @@ export default function AdminApp() {
         )}
       </Paper>
 
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 4, bgcolor: 'background.paper', p: 3, borderRadius: 2, borderTop: '1px solid rgba(255,255,255,0.1)', width: '100%' }}>
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 4, bgcolor: 'background.paper', p: 3, borderRadius: 2, borderTop: '1px solid rgba(255,255,255,0.1)', width: '100%', flexWrap: 'wrap' }}>
         <Button size="large" onClick={() => setActiveView('PRODUCTS')} color="inherit">Anuluj</Button>
         <Button size="large" variant="contained" color={isEditing ? "primary" : "secondary"} onClick={handleSaveProductSubmit} disabled={!productForm.nazwa || !productForm.cena_jednostkowa || productForm.ilosc_dostepna === ''}>
           {isEditing ? "Zapisz Zmiany" : "Zapisz i Opublikuj Produkt"}
@@ -1322,7 +1313,7 @@ export default function AdminApp() {
           <Button variant="outlined" startIcon={<Clock size={16} />} onClick={fetchReviews}>Odśwież Listę</Button>
         </Box>
 
-        <TableContainer component={Paper} sx={{ borderRadius: 2, width: '100%' }}>
+        <TableContainer component={Paper} sx={{ borderRadius: 2, width: '100%', overflowX: 'auto' }}>
           {loadingReviews ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', p: 5 }}><CircularProgress /></Box>
           ) : (
@@ -1378,7 +1369,7 @@ export default function AdminApp() {
         <Typography variant="h4" fontWeight="bold" sx={{ mb: 4, display: 'flex', alignItems: 'center', gap: 2 }}><MessageSquare color="#f59e0b" /> Szczegóły Opinii #{rev.id}</Typography>
 
         <Paper sx={{ p: 4, borderRadius: 2, bgcolor: 'background.paper' }}>
-          <Box sx={{ display: 'flex', gap: 3, mb: 4, alignItems: 'center', pb: 3, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+          <Box sx={{ display: 'flex', gap: 3, mb: 4, alignItems: { xs: 'flex-start', sm: 'center' }, flexDirection: { xs: 'column', sm: 'row' }, pb: 3, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
             {rev.towar_zdjecie ? (
               <Box component="img" src={`${API_BASE_URL}${rev.towar_zdjecie}`} sx={{ width: 80, height: 80, objectFit: 'contain', bgcolor: 'white', borderRadius: 2, p: 1 }} />
             ) : (
@@ -1403,11 +1394,11 @@ export default function AdminApp() {
           </Box>
 
           <Grid container spacing={3}>
-            <Grid item xs={6}>
+            <Grid item xs={12} sm={6}>
               <Typography variant="caption" color="text.secondary">AUTOR OPINII</Typography>
               <Typography variant="body1" fontWeight="bold" sx={{ mt: 0.5 }}>{rev.klient_dane}</Typography>
             </Grid>
-            <Grid item xs={6}>
+            <Grid item xs={12} sm={6}>
               <Typography variant="caption" color="text.secondary">DATA WYSTAWIENIA</Typography>
               <Typography variant="body1" fontWeight="bold" sx={{ mt: 0.5 }}>{rev.data_wystawienia}</Typography>
             </Grid>
@@ -1446,7 +1437,7 @@ export default function AdminApp() {
           <Button variant="outlined" startIcon={<Clock size={16} />} onClick={fetchComplaints}>Odśwież Listę</Button>
         </Box>
 
-        <TableContainer component={Paper} sx={{ borderRadius: 2, width: '100%' }}>
+        <TableContainer component={Paper} sx={{ borderRadius: 2, width: '100%', overflowX: 'auto' }}>
           {loadingComplaints ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', p: 5 }}><CircularProgress /></Box>
           ) : (
@@ -1525,11 +1516,11 @@ export default function AdminApp() {
     return (
       <Box sx={{ width: '100%', maxWidth: 800, mx: 'auto', pb: 8 }}>
         <Button startIcon={<ArrowLeft size={20} />} onClick={() => { setSelectedComplaint(null); setActiveView('COMPLAINTS'); }} sx={{ mb: 3, color: 'text.secondary' }}>Wróć do listy reklamacji</Button>
-        <Typography variant="h4" fontWeight="bold" sx={{ mb: 4, display: 'flex', alignItems: 'center', gap: 2 }}><AlertTriangle color="#ef4444" /> Konwersacja Zgłoszenia #{comp.id}</Typography>
+        <Typography variant="h4" fontWeight="bold" sx={{ mb: 4, display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}><AlertTriangle color="#ef4444" /> Konwersacja Zgłoszenia #{comp.id}</Typography>
 
-        <Paper sx={{ p: 4, borderRadius: 2, bgcolor: 'background.paper' }}>
+        <Paper sx={{ p: { xs: 2, sm: 4 }, borderRadius: 2, bgcolor: 'background.paper' }}>
 
-          <Box sx={{ display: 'flex', gap: 3, mb: 4, alignItems: 'center', pb: 3, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+          <Box sx={{ display: 'flex', gap: 3, mb: 4, alignItems: { xs: 'flex-start', sm: 'center' }, flexDirection: { xs: 'column', sm: 'row' }, pb: 3, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
             <Box>
               <Typography variant="caption" color="text.secondary">POWIĄZANE ZAMÓWIENIE</Typography>
               <Typography variant="h6" fontWeight="bold" color="primary.main">Numer #{comp.zamowienie_id}</Typography>
@@ -1540,7 +1531,7 @@ export default function AdminApp() {
               else { setSnackbar({ open: true, message: 'Przejdź do zakładki Zamówienia aby odświeżyć.', severity: 'info' }) }
             }}>Przejdź do zamówienia</Button>
 
-            <Box sx={{ ml: 'auto' }}>
+            <Box sx={{ ml: { xs: 0, sm: 'auto' }, width: { xs: '100%', sm: 'auto' } }}>
               <TextField
                 select
                 size="small"
@@ -1548,7 +1539,7 @@ export default function AdminApp() {
                 value={comp.status_id || ''}
                 onChange={(e) => handleStatusChange(comp.id, e.target.value)}
                 SelectProps={{ native: true }}
-                sx={{ minWidth: 200 }}
+                sx={{ minWidth: 200, width: { xs: '100%', sm: 'auto' } }}
               >
                 <option value="" disabled>Wybierz status...</option>
                 {complaintStatuses.map(s => (
@@ -1559,11 +1550,11 @@ export default function AdminApp() {
           </Box>
 
           <Grid container spacing={3}>
-            <Grid item xs={6}>
+            <Grid item xs={12} sm={6}>
               <Typography variant="caption" color="text.secondary">DANE KLIENTA</Typography>
               <Typography variant="body1" fontWeight="bold" sx={{ mt: 0.5 }}>{comp.klient_dane}</Typography>
             </Grid>
-            <Grid item xs={6}>
+            <Grid item xs={12} sm={6}>
               <Typography variant="caption" color="text.secondary">ZŁOŻONO DNIA</Typography>
               <Typography variant="body1" fontWeight="bold" sx={{ mt: 0.5 }}>{comp.data_zgloszenia}</Typography>
             </Grid>
@@ -1574,16 +1565,16 @@ export default function AdminApp() {
           <Box sx={{ mt: 3 }}>
             <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}><MessageSquare size={20} /> Konwersacja z klientem</Typography>
 
-            <Box sx={{ maxHeight: 400, overflowY: 'auto', mb: 3, p: 2, bgcolor: 'rgba(0,0,0,0.2)', borderRadius: 2 }}>
+            <Box sx={{ maxHeight: 400, overflowY: 'auto', mb: 3, p: { xs: 1, sm: 2 }, bgcolor: 'rgba(0,0,0,0.2)', borderRadius: 2 }}>
               <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-start' }}>
-                <Paper sx={{ p: 1.5, maxWidth: '80%', bgcolor: '#334155', color: '#f8fafc', borderRadius: 2, boxShadow: 'none', borderLeft: '4px solid #ef4444' }}>
+                <Paper sx={{ p: 1.5, maxWidth: '90%', bgcolor: '#334155', color: '#f8fafc', borderRadius: 2, boxShadow: 'none', borderLeft: '4px solid #ef4444', wordBreak: 'break-word' }}>
                   <Typography variant="caption" sx={{ color: '#94a3b8', display: 'block', mb: 0.5 }}>Klient (Zgłoszenie początkowe) • {comp.data_zgloszenia}</Typography>
                   <Typography variant="body2" sx={{ fontStyle: 'italic' }}>{comp.pelna_tresc}</Typography>
                 </Paper>
               </Box>
               {comp.wiadomosci && comp.wiadomosci.map((msg, idx) => (
                 <Box key={idx} sx={{ display: 'flex', justifyContent: msg.autor === 'SKLEP' ? 'flex-end' : 'flex-start', mb: 2 }}>
-                  <Paper sx={{ p: 1.5, maxWidth: '80%', bgcolor: msg.autor === 'SKLEP' ? '#3b82f6' : '#334155', color: '#f8fafc', borderRadius: 2, boxShadow: 'none', borderRight: msg.autor === 'SKLEP' ? '4px solid #60a5fa' : 'none', borderLeft: msg.autor === 'KLIENT' ? '4px solid #10b981' : 'none' }}>
+                  <Paper sx={{ p: 1.5, maxWidth: '90%', bgcolor: msg.autor === 'SKLEP' ? '#3b82f6' : '#334155', color: '#f8fafc', borderRadius: 2, boxShadow: 'none', borderRight: msg.autor === 'SKLEP' ? '4px solid #60a5fa' : 'none', borderLeft: msg.autor === 'KLIENT' ? '4px solid #10b981' : 'none', wordBreak: 'break-word' }}>
                     <Typography variant="caption" sx={{ opacity: 0.7, display: 'block', mb: 0.5 }}>
                       {msg.autor === 'SKLEP' ? 'Ty (Obsługa Sklepu)' : 'Klient'} • {msg.data_wyslania}
                     </Typography>
@@ -1603,9 +1594,11 @@ export default function AdminApp() {
               onChange={(e) => setComplaintReplyText(e.target.value)}
               sx={{ mb: 2, bgcolor: 'background.default' }}
             />
-            <Button variant="contained" color="success" onClick={handleSaveComplaintReply} disabled={!complaintReplyText.trim()}>
-              Wyślij odpowiedź
-            </Button>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <Button variant="contained" color="success" onClick={handleSaveComplaintReply} disabled={!complaintReplyText.trim()}>
+                Wyślij odpowiedź
+              </Button>
+            </Box>
           </Box>
 
         </Paper>
@@ -1662,9 +1655,9 @@ export default function AdminApp() {
     return (
       <ThemeProvider theme={adminTheme}>
         <CssBaseline />
-        <GlobalStyles styles={{ '#root': { maxWidth: 'none !important', width: '100%', margin: 0, padding: 0 } }} />
-        <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'background.default' }}>
-          <Card sx={{ width: 400, p: 2, borderRadius: 3, boxShadow: '0 10px 40px rgba(0,0,0,0.5)' }}>
+        <GlobalStyles styles={{ 'html, body': { overflowX: 'hidden', margin: 0, padding: 0, backgroundColor: '#0f172a' }, '#root': { maxWidth: 'none !important', width: '100%', margin: 0, padding: 0 } }} />
+        <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'background.default', width: '100%' }}>
+          <Card sx={{ width: 400, maxWidth: '90%', p: 2, borderRadius: 3, boxShadow: '0 10px 40px rgba(0,0,0,0.5)' }}>
             <CardContent>
               <Box sx={{ textAlign: 'center', mb: 3 }}><Settings size={48} color="#3b82f6" /><Typography variant="h5" fontWeight="bold" sx={{ mt: 1 }}>Panel Pracownika</Typography></Box>
               {loginError && <Alert severity="error" sx={{ mb: 2 }}>{loginError}</Alert>}
@@ -1681,8 +1674,8 @@ export default function AdminApp() {
   return (
     <ThemeProvider theme={adminTheme}>
       <CssBaseline />
-      <GlobalStyles styles={{ '#root': { maxWidth: 'none !important', width: '100%', margin: 0, padding: 0 } }} />
-      <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+      <GlobalStyles styles={{ 'html, body': { overflowX: 'hidden', margin: 0, padding: 0, backgroundColor: '#0f172a' }, '#root': { maxWidth: 'none !important', width: '100%', margin: 0, padding: 0 } }} />
+      <Box sx={{ display: 'flex', minHeight: '100vh', width: '100%', overflowX: 'hidden', bgcolor: 'background.default' }}>
         <AppBar position="fixed" sx={{ width: { sm: `calc(100% - ${DRAWER_WIDTH}px)` }, ml: { sm: `${DRAWER_WIDTH}px` } }}>
           <Toolbar>
             <IconButton color="inherit" edge="start" onClick={handleDrawerToggle} sx={{ mr: 2, display: { sm: 'none' } }}><Menu /></IconButton>
@@ -1694,7 +1687,7 @@ export default function AdminApp() {
           <Drawer variant="temporary" open={mobileOpen} onClose={handleDrawerToggle} ModalProps={{ keepMounted: true }} sx={{ display: { xs: 'block', sm: 'none' }, '& .MuiDrawer-paper': { boxSizing: 'border-box', width: DRAWER_WIDTH } }}>{drawer}</Drawer>
           <Drawer variant="permanent" sx={{ display: { xs: 'none', sm: 'block' }, '& .MuiDrawer-paper': { boxSizing: 'border-box', width: DRAWER_WIDTH } }} open>{drawer}</Drawer>
         </Box>
-        <Box component="main" sx={{ flexGrow: 1, p: { xs: 2, md: 4 }, width: { sm: `calc(100% - ${DRAWER_WIDTH}px)` }, mt: 8 }}>
+        <Box component="main" sx={{ flexGrow: 1, p: { xs: 2, sm: 3, md: 4 }, width: { xs: '100%', sm: `calc(100% - ${DRAWER_WIDTH}px)` }, minWidth: 0, mt: { xs: 7, sm: 8 } }}>
           {activeView === 'DASHBOARD' && renderDashboard()}
           {activeView === 'ORDERS' && renderOrders()}
           {activeView === 'ORDER_DETAILS' && renderOrderDetails()}
